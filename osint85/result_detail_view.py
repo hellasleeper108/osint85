@@ -255,47 +255,47 @@ Keep it concise (3-4 sentences)."""
                 self.app.log_event("error", f"Failed to generate summary: {str(e)}")
 
     async def action_export(self) -> None:
-        """Action: Export the result."""
-        import json
-        from pathlib import Path
+        """Action: Export the result with format selection."""
+        from .export import get_exporter, ExportFormat
+        from .project import ProjectManager
 
         if hasattr(self.app, 'log_event'):
             self.app.log_event("info", f"Exporting result: {self.result.url[:50]}...")
 
         try:
-            # Create export directory
-            export_dir = Path(".osint85/exports")
-            export_dir.mkdir(parents=True, exist_ok=True)
+            # Get project manager
+            pm = ProjectManager()
 
-            # Generate filename from URL and timestamp
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            safe_filename = "".join(
-                c if c.isalnum() or c in "-_" else "_"
-                for c in self.result.title[:30]
-            ) or "result"
-            filename = f"{safe_filename}_{timestamp}.json"
-            export_path = export_dir / filename
+            # Get query object for full metadata
+            query = None
+            if hasattr(self.app, 'current_project') and self.app.current_project:
+                queries = pm.list_queries(self.app.current_project.id)
+                query = next((q for q in queries if q.id == self.result.query_id), None)
 
-            # Export data
-            export_data = {
-                "id": self.result.id,
-                "url": self.result.url,
-                "title": self.result.title,
-                "snippet": self.result.snippet,
-                "tags": self.result.tags,
-                "source_engine": self.result.source_engine,
-                "first_seen_at": self.result.first_seen_at,
-                "last_seen_at": self.result.last_seen_at,
-                "category": self.category,
-                "query_description": self.query_description,
-                "exported_at": datetime.now().isoformat(),
-            }
+            # Export in all formats (user can choose which to use)
+            formats = [
+                (ExportFormat.JSON, "JSON"),
+                (ExportFormat.MARKDOWN, "Markdown"),
+                (ExportFormat.HTML, "HTML")
+            ]
 
-            with open(export_path, "w") as f:
-                json.dump(export_data, f, indent=2)
+            exported_files = []
+            for fmt, label in formats:
+                try:
+                    exporter = get_exporter(fmt, pm)
+                    output_path = exporter.export_result(self.result, query, self.category)
+                    exported_files.append((label, output_path.name))
+                except Exception as e:
+                    if hasattr(self.app, 'log_event'):
+                        self.app.log_event("error", f"{label} export failed: {str(e)}")
 
-            if hasattr(self.app, 'log_event'):
-                self.app.log_event("success", f"Exported to {export_path.name}")
+            if exported_files:
+                files_str = ", ".join([f"{label} ({name})" for label, name in exported_files])
+                if hasattr(self.app, 'log_event'):
+                    self.app.log_event("success", f"Exported to: {files_str}")
+            else:
+                if hasattr(self.app, 'log_event'):
+                    self.app.log_event("error", "All exports failed")
 
         except Exception as e:
             if hasattr(self.app, 'log_event'):

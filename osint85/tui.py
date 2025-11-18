@@ -730,6 +730,25 @@ class OSINTApp(App):
             keywords=["create", "export", "summary"]
         )
 
+        # Export commands
+        command_registry.register(
+            "export.category",
+            "Export Category Results",
+            "Export all results for current category to JSON/MD/HTML",
+            lambda: self._export_category(),
+            CommandCategory.REPORT,
+            keywords=["save", "download", "json", "markdown", "html"]
+        )
+
+        command_registry.register(
+            "export.project",
+            "Export Full Project",
+            "Export entire project to JSON/MD/HTML",
+            lambda: self._export_project(),
+            CommandCategory.REPORT,
+            keywords=["save", "download", "backup", "archive"]
+        )
+
         # Navigation commands
         for cat_id, label, risk in CATEGORIES:
             command_registry.register(
@@ -821,6 +840,79 @@ class OSINTApp(App):
 
         # TODO: Implement report generation modal
         log.write_event("success", "Report generation coming soon!")
+
+    def _export_category(self):
+        """Export current category results to files."""
+        from .export import get_exporter, ExportFormat
+
+        if not self.current_project:
+            log = self.query_one("#event-log", EventLog)
+            log.write_event("error", "No project selected")
+            return
+
+        log = self.query_one("#event-log", EventLog)
+        category_label = next(
+            (label for cat_id, label, _ in CATEGORIES if cat_id == self.current_category),
+            self.current_category
+        )
+
+        log.write_event("info", f"Exporting category: {category_label}...")
+
+        try:
+            pm = ProjectManager()
+            exported_files = []
+
+            # Export in all formats
+            for fmt, label in [(ExportFormat.JSON, "JSON"), (ExportFormat.MARKDOWN, "Markdown"), (ExportFormat.HTML, "HTML")]:
+                try:
+                    exporter = get_exporter(fmt, pm)
+                    output_path = exporter.export_category(self.current_project, self.current_category)
+                    exported_files.append((label, output_path.name))
+                except Exception as e:
+                    log.write_event("error", f"{label} export failed: {str(e)}")
+
+            if exported_files:
+                files_str = ", ".join([f"{label} ({name})" for label, name in exported_files])
+                log.write_event("success", f"Exported to: {files_str}")
+            else:
+                log.write_event("error", "All exports failed")
+
+        except Exception as e:
+            log.write_event("error", f"Export error: {str(e)}")
+
+    def _export_project(self):
+        """Export full project to files."""
+        from .export import get_exporter, ExportFormat
+
+        if not self.current_project:
+            log = self.query_one("#event-log", EventLog)
+            log.write_event("error", "No project selected")
+            return
+
+        log = self.query_one("#event-log", EventLog)
+        log.write_event("info", f"Exporting project: {self.current_project.name}...")
+
+        try:
+            pm = ProjectManager()
+            exported_files = []
+
+            # Export in all formats
+            for fmt, label in [(ExportFormat.JSON, "JSON"), (ExportFormat.MARKDOWN, "Markdown"), (ExportFormat.HTML, "HTML")]:
+                try:
+                    exporter = get_exporter(fmt, pm)
+                    output_path = exporter.export_project(self.current_project)
+                    exported_files.append((label, output_path.name))
+                except Exception as e:
+                    log.write_event("error", f"{label} export failed: {str(e)}")
+
+            if exported_files:
+                files_str = ", ".join([f"{label} ({name})" for label, name in exported_files])
+                log.write_event("success", f"Exported to: {files_str}")
+            else:
+                log.write_event("error", "All exports failed")
+
+        except Exception as e:
+            log.write_event("error", f"Export error: {str(e)}")
 
     def _navigate_to_category(self, category_id: str, category_label: str):
         """Navigate to a specific category."""

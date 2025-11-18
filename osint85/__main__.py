@@ -13,6 +13,7 @@ from .dorks import DorkGenerator
 from .scanner import Scanner
 from .reporting import Reporter
 from .config import config
+from .export import get_exporter, ExportFormat
 
 app = typer.Typer(
     name="osint85",
@@ -349,6 +350,266 @@ def report(
         except Exception as e:
             console.print(f"[red]Error generating report: {e}[/red]")
             raise typer.Exit(1)
+
+
+@app.command()
+def export_result(
+    result_id: int = typer.Argument(..., help="Result ID to export"),
+    format: str = typer.Option("json", "--format", "-f", help="Export format (markdown, json, html)"),
+    output: Optional[str] = typer.Option(None, "--out", "-o", help="Output file path (auto-generated if not specified)")
+):
+    """Export a single result to file."""
+    pm = _get_project_manager()
+
+    # Get the result
+    try:
+        # Find result by ID across all projects
+        all_results = []
+        for project in pm.list_projects():
+            all_results.extend(pm.get_all_results(project.id))
+
+        result = next((r for r in all_results if r.id == result_id), None)
+
+        if not result:
+            console.print(f"[red]Result with ID {result_id} not found.[/red]")
+            raise typer.Exit(1)
+
+        # Get associated query
+        queries = []
+        for project in pm.list_projects():
+            queries.extend(pm.list_queries(project.id))
+
+        query = next((q for q in queries if q.id == result.query_id), None)
+        category = query.category if query else ""
+
+        # Export
+        exporter = get_exporter(format.lower(), pm)
+
+        if output:
+            # Use custom output path
+            from pathlib import Path
+            output_path = Path(output)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+
+            if format.lower() == ExportFormat.MARKDOWN:
+                content = exporter._generate_result_markdown(result, query, category)
+            elif format.lower() == ExportFormat.JSON:
+                import json
+                from datetime import datetime
+                content = json.dumps({
+                    "schema_version": exporter.pm.__class__.__name__,
+                    "export_type": "single_result",
+                    "exported_at": datetime.now().isoformat(),
+                    "result": exporter._result_to_dict(result),
+                    "query": exporter._query_to_dict(query) if query else None,
+                    "category": category
+                }, indent=2)
+            elif format.lower() == ExportFormat.HTML:
+                content = exporter._generate_result_html(result, query, category)
+                from datetime import datetime
+                content = exporter.HTML_TEMPLATE.format(
+                    title=f"OSINT-85 Result: {result.title or result.url[:50]}",
+                    content=content,
+                    version="1.0.0",
+                    timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                )
+            else:
+                console.print(f"[red]Unsupported format: {format}[/red]")
+                raise typer.Exit(1)
+
+            with open(output_path, "w", encoding="utf-8") as f:
+                f.write(content)
+
+            console.print(f"[green]✓[/green] Exported result {result_id} to: {output_path}")
+        else:
+            # Use auto-generated path
+            output_path = exporter.export_result(result, query, category)
+            console.print(f"[green]✓[/green] Exported result {result_id} to: {output_path}")
+
+    except Exception as e:
+        console.print(f"[red]Export error: {e}[/red]")
+        raise typer.Exit(1)
+
+
+@app.command()
+def export_category(
+    category: str = typer.Argument(..., help="Category name to export"),
+    format: str = typer.Option("json", "--format", "-f", help="Export format (markdown, json, html)"),
+    project_id: Optional[int] = typer.Option(None, "--project", "-p", help="Project ID"),
+    output: Optional[str] = typer.Option(None, "--out", "-o", help="Output file path")
+):
+    """Export all results for a category."""
+    pid = _ensure_project(project_id)
+
+    pm = _get_project_manager()
+    project = pm.get_project(pid)
+
+    try:
+        exporter = get_exporter(format.lower(), pm)
+
+        if output:
+            # Use custom output path
+            from pathlib import Path
+            output_path = Path(output)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+
+            # Get all queries and results for category
+            queries = pm.list_queries(pid)
+            category_queries = [q for q in queries if q.category == category]
+
+            all_results = []
+            for query in category_queries:
+                results = pm.get_results_by_query(query.id)
+                all_results.extend([(query, r) for r in results])
+
+            if not all_results:
+                console.print(f"[yellow]No results found for category: {category}[/yellow]")
+                return
+
+            # Generate content
+            if format.lower() == ExportFormat.MARKDOWN:
+                content = exporter._generate_category_markdown(project, category, all_results)
+            elif format.lower() == ExportFormat.JSON:
+                import json
+                from datetime import datetime
+                results_data = []
+                for query, result in all_results:
+                    results_data.append({
+                        "result": exporter._result_to_dict(result),
+                        "query": exporter._query_to_dict(query)
+                    })
+                content = json.dumps({
+                    "schema_version": "1.0.0",
+                    "export_type": "category",
+                    "exported_at": datetime.now().isoformat(),
+                    "target": exporter._target_to_dict(project),
+                    "category": category,
+                    "total_results": len(results_data),
+                    "results": results_data
+                }, indent=2)
+            elif format.lower() == ExportFormat.HTML:
+                content = exporter._generate_category_html(project, category, all_results)
+                from datetime import datetime
+                content = exporter.HTML_TEMPLATE.format(
+                    title=f"OSINT-85 Category Report: {category}",
+                    content=content,
+                    version="1.0.0",
+                    timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                )
+            else:
+                console.print(f"[red]Unsupported format: {format}[/red]")
+                raise typer.Exit(1)
+
+            with open(output_path, "w", encoding="utf-8") as f:
+                f.write(content)
+
+            console.print(f"[green]✓[/green] Exported {len(all_results)} results to: {output_path}")
+        else:
+            # Use auto-generated path
+            output_path = exporter.export_category(project, category)
+
+            # Count results
+            queries = pm.list_queries(pid)
+            category_queries = [q for q in queries if q.category == category]
+            total_results = sum(len(pm.get_results_by_query(q.id)) for q in category_queries)
+
+            console.print(f"[green]✓[/green] Exported {total_results} results to: {output_path}")
+
+    except Exception as e:
+        console.print(f"[red]Export error: {e}[/red]")
+        raise typer.Exit(1)
+
+
+@app.command()
+def export_project(
+    format: str = typer.Option("json", "--format", "-f", help="Export format (markdown, json, html)"),
+    project_id: Optional[int] = typer.Option(None, "--project", "-p", help="Project ID"),
+    output: Optional[str] = typer.Option(None, "--out", "-o", help="Output file path")
+):
+    """Export entire project to file."""
+    pid = _ensure_project(project_id)
+
+    pm = _get_project_manager()
+    project = pm.get_project(pid)
+
+    console.print(f"[cyan]Exporting project: {project.name}[/cyan]")
+
+    try:
+        exporter = get_exporter(format.lower(), pm)
+
+        if output:
+            # Use custom output path
+            from pathlib import Path
+            output_path = Path(output)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+
+            # Get all data
+            queries = pm.list_queries(pid)
+            categories = {}
+
+            for query in queries:
+                if query.category not in categories:
+                    categories[query.category] = []
+                results = pm.get_results_by_query(query.id)
+                categories[query.category].extend([(query, r) for r in results])
+
+            total_results = sum(len(results) for results in categories.values())
+
+            if total_results == 0:
+                console.print(f"[yellow]No results found in project. Run 'osint85 scan' first.[/yellow]")
+                return
+
+            # Generate content
+            if format.lower() == ExportFormat.MARKDOWN:
+                content = exporter._generate_project_markdown(project, categories)
+            elif format.lower() == ExportFormat.JSON:
+                import json
+                from datetime import datetime
+                json_categories = {}
+                for category, results in categories.items():
+                    json_categories[category] = []
+                    for query, result in results:
+                        json_categories[category].append({
+                            "result": exporter._result_to_dict(result),
+                            "query": exporter._query_to_dict(query)
+                        })
+                content = json.dumps({
+                    "schema_version": "1.0.0",
+                    "export_type": "full_project",
+                    "exported_at": datetime.now().isoformat(),
+                    "target": exporter._target_to_dict(project),
+                    "total_results": total_results,
+                    "total_categories": len(categories),
+                    "categories": json_categories
+                }, indent=2)
+            elif format.lower() == ExportFormat.HTML:
+                content = exporter._generate_project_html(project, categories)
+                from datetime import datetime
+                content = exporter.HTML_TEMPLATE.format(
+                    title=f"OSINT-85 Full Report: {project.name}",
+                    content=content,
+                    version="1.0.0",
+                    timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                )
+            else:
+                console.print(f"[red]Unsupported format: {format}[/red]")
+                raise typer.Exit(1)
+
+            with open(output_path, "w", encoding="utf-8") as f:
+                f.write(content)
+
+            console.print(f"[green]✓[/green] Exported {total_results} results across {len(categories)} categories to: {output_path}")
+        else:
+            # Use auto-generated path
+            output_path = exporter.export_project(project)
+
+            # Count results
+            total_results = len(pm.get_all_results(pid))
+            console.print(f"[green]✓[/green] Exported {total_results} results to: {output_path}")
+
+    except Exception as e:
+        console.print(f"[red]Export error: {e}[/red]")
+        raise typer.Exit(1)
 
 
 @app.command()
