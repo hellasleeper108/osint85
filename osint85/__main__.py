@@ -14,6 +14,7 @@ from .scanner import Scanner
 from .reporting import Reporter
 from .config import config
 from .export import get_exporter, ExportFormat
+from .dedupe import DeduplicationEngine
 
 app = typer.Typer(
     name="osint85",
@@ -609,6 +610,96 @@ def export_project(
 
     except Exception as e:
         console.print(f"[red]Export error: {e}[/red]")
+        raise typer.Exit(1)
+
+
+@app.command()
+def dedupe_run(
+    project_id: Optional[int] = typer.Option(None, "--project", "-p", help="Project ID"),
+    category: Optional[str] = typer.Option(None, "--category", "-c", help="Specific category to deduplicate"),
+    remove: bool = typer.Option(False, "--remove", "-r", help="Remove duplicates (not just mark)"),
+    threshold: float = typer.Option(90.0, "--threshold", "-t", help="Fuzzy similarity threshold (0-100)")
+):
+    """Detect and mark/remove duplicate results."""
+    pid = _ensure_project(project_id)
+
+    pm = _get_project_manager()
+    project = pm.get_project(pid)
+
+    console.print(f"[cyan]Running deduplication for: {project.name}[/cyan]")
+    if category:
+        console.print(f"Category: {category}")
+    console.print(f"Threshold: {threshold}%")
+
+    try:
+        engine = DeduplicationEngine(pm, fuzzy_threshold=threshold)
+
+        # Get stats before
+        before_stats = engine.get_duplicate_stats(pid)
+        console.print(f"\n[yellow]Before deduplication:[/yellow]")
+        console.print(f"  Total results: {before_stats['total_results']}")
+        console.print(f"  Unique results: {before_stats['unique_results']}")
+        console.print(f"  Duplicate results: {before_stats['duplicate_results']}")
+
+        if remove:
+            # Remove duplicates
+            console.print(f"\n[cyan]Removing duplicates...[/cyan]")
+            removed_count = engine.remove_duplicates(pid, category)
+            console.print(f"[green]✓[/green] Removed {removed_count} duplicate results")
+        else:
+            # Just mark duplicates
+            console.print(f"\n[cyan]Marking duplicates...[/cyan]")
+            marked_count = engine.mark_duplicates(pid, category)
+            console.print(f"[green]✓[/green] Marked {marked_count} results as duplicates")
+
+        # Get stats after
+        after_stats = engine.get_duplicate_stats(pid)
+        console.print(f"\n[yellow]After deduplication:[/yellow]")
+        console.print(f"  Total results: {after_stats['total_results']}")
+        console.print(f"  Unique results: {after_stats['unique_results']}")
+        console.print(f"  Duplicate results: {after_stats['duplicate_results']}")
+
+        if not remove:
+            console.print(f"\n[dim]Use --remove to delete duplicates instead of just marking them.[/dim]")
+
+    except Exception as e:
+        console.print(f"[red]Deduplication error: {e}[/red]")
+        raise typer.Exit(1)
+
+
+@app.command()
+def dedupe_stats(
+    project_id: Optional[int] = typer.Option(None, "--project", "-p", help="Project ID")
+):
+    """Show duplicate statistics for a project."""
+    pid = _ensure_project(project_id)
+
+    pm = _get_project_manager()
+    project = pm.get_project(pid)
+
+    console.print(f"[cyan]Duplicate statistics for: {project.name}[/cyan]\n")
+
+    try:
+        engine = DeduplicationEngine(pm)
+        stats = engine.get_duplicate_stats(pid)
+
+        table = Table(title="Deduplication Statistics")
+        table.add_column("Metric", style="cyan")
+        table.add_column("Value", style="green")
+
+        table.add_row("Total Results", str(stats['total_results']))
+        table.add_row("Unique Results", str(stats['unique_results']))
+        table.add_row("Duplicate Results", str(stats['duplicate_results']))
+        table.add_row("Duplicate Groups", str(stats['duplicate_groups']))
+
+        if stats['total_results'] > 0:
+            dup_percent = (stats['duplicate_results'] / stats['total_results']) * 100
+            table.add_row("Duplication Rate", f"{dup_percent:.1f}%")
+
+        console.print(table)
+
+    except Exception as e:
+        console.print(f"[red]Error getting stats: {e}[/red]")
         raise typer.Exit(1)
 
 

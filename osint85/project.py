@@ -146,6 +146,25 @@ class ProjectManager:
         """
         return self.db.get_all_results(project_id)
 
+    def mark_as_duplicate(self, result_id: int, duplicate_of_id: int,
+                         similarity_score: float = 100.0):
+        """Mark a result as a duplicate of another result.
+
+        Args:
+            result_id: ID of the duplicate result
+            duplicate_of_id: ID of the primary result
+            similarity_score: Similarity score (0-100)
+        """
+        self.db.mark_as_duplicate(result_id, duplicate_of_id, similarity_score)
+
+    def delete_result(self, result_id: int):
+        """Delete a result from the database.
+
+        Args:
+            result_id: Result ID to delete
+        """
+        self.db.delete_result(result_id)
+
     def close(self):
         """Close database connection."""
         self.db.close()

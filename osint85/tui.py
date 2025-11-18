@@ -217,6 +217,13 @@ class ResultGrid(DataTable):
                 url_short = r.url[:50] + "..." if len(r.url) > 50 else r.url
                 title_short = r.title[:40] + "..." if len(r.title) > 40 else r.title
                 score_display = "N/A"
+
+                # Add duplicate indicator
+                if r.is_duplicate:
+                    url_short = f"🔗 {url_short}"  # Chain link emoji for duplicates
+                    if r.similarity_score:
+                        score_display = f"{r.similarity_score:.0f}%"
+
                 row_key = self.add_row(url_short, title_short, r.tags or "-", score_display)
 
                 # Store full result data with query metadata
@@ -749,6 +756,16 @@ class OSINTApp(App):
             keywords=["save", "download", "backup", "archive"]
         )
 
+        # Data management commands
+        command_registry.register(
+            "data.dedupe",
+            "Remove Duplicates",
+            "Detect and remove duplicate results from current project",
+            lambda: self._remove_duplicates(),
+            CommandCategory.VIEW,
+            keywords=["dedupe", "dedup", "duplicates", "clean", "unique"]
+        )
+
         # Navigation commands
         for cat_id, label, risk in CATEGORIES:
             command_registry.register(
@@ -913,6 +930,44 @@ class OSINTApp(App):
 
         except Exception as e:
             log.write_event("error", f"Export error: {str(e)}")
+
+    def _remove_duplicates(self):
+        """Remove duplicate results from the current project."""
+        from .dedupe import DeduplicationEngine
+
+        if not self.current_project:
+            log = self.query_one("#event-log", EventLog)
+            log.write_event("error", "No project selected")
+            return
+
+        log = self.query_one("#event-log", EventLog)
+        log.write_event("info", "Analyzing results for duplicates...")
+
+        try:
+            pm = ProjectManager()
+            engine = DeduplicationEngine(pm, fuzzy_threshold=90.0)
+
+            # Get statistics before removal
+            stats_before = engine.get_duplicate_stats(self.current_project.id)
+
+            # Remove duplicates
+            removed_count = engine.remove_duplicates(self.current_project.id)
+
+            if removed_count > 0:
+                log.write_event(
+                    "success",
+                    f"Removed {removed_count} duplicate results "
+                    f"({stats_before['total_results'] - removed_count} unique results remain)"
+                )
+
+                # Refresh the results view
+                results = self.query_one("#results", ResultGrid)
+                results.load_results(self.current_category)
+            else:
+                log.write_event("info", "No duplicates found")
+
+        except Exception as e:
+            log.write_event("error", f"Deduplication error: {str(e)}")
 
     def _navigate_to_category(self, category_id: str, category_label: str):
         """Navigate to a specific category."""

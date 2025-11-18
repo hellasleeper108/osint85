@@ -43,12 +43,16 @@ class Result:
     tags: str = ""  # Comma-separated
     first_seen_at: Optional[str] = None
     last_seen_at: Optional[str] = None
+    # Deduplication fields
+    is_duplicate: bool = False
+    duplicate_of_id: Optional[int] = None
+    similarity_score: Optional[float] = None
 
 
 class Database:
     """SQLite database manager for osint85 projects."""
 
-    SCHEMA_VERSION = 1
+    SCHEMA_VERSION = 2  # Updated for deduplication support
 
     def __init__(self, db_path: str = ".osint85/project.db"):
         """Initialize database connection.
@@ -121,6 +125,47 @@ class Database:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_queries_target ON queries(target_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_results_query ON results(query_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_results_url ON results(url)")
+
+        self.conn.commit()
+
+        # Run migrations
+        self._migrate_schema()
+
+    def _migrate_schema(self):
+        """Run database migrations for schema updates."""
+        if not self.conn:
+            raise RuntimeError("Database connection not established")
+
+        cursor = self.conn.cursor()
+
+        # Check if deduplication columns exist (added in schema v2)
+        cursor.execute("PRAGMA table_info(results)")
+        columns = [row[1] for row in cursor.fetchall()]
+
+        if "is_duplicate" not in columns:
+            # Add deduplication columns
+            cursor.execute("""
+                ALTER TABLE results
+                ADD COLUMN is_duplicate BOOLEAN DEFAULT 0
+            """)
+
+        if "duplicate_of_id" not in columns:
+            cursor.execute("""
+                ALTER TABLE results
+                ADD COLUMN duplicate_of_id INTEGER
+            """)
+
+        if "similarity_score" not in columns:
+            cursor.execute("""
+                ALTER TABLE results
+                ADD COLUMN similarity_score REAL
+            """)
+
+        # Create index for duplicate lookups
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_results_duplicate
+            ON results(is_duplicate, duplicate_of_id)
+        """)
 
         self.conn.commit()
 
@@ -460,7 +505,10 @@ class Database:
                 source_engine=row['source_engine'],
                 tags=row['tags'],
                 first_seen_at=row['first_seen_at'],
-                last_seen_at=row['last_seen_at']
+                last_seen_at=row['last_seen_at'],
+                is_duplicate=bool(row.get('is_duplicate', 0)),
+                duplicate_of_id=row.get('duplicate_of_id'),
+                similarity_score=row.get('similarity_score')
             )
             for row in rows
         ]
@@ -496,7 +544,46 @@ class Database:
                 source_engine=row['source_engine'],
                 tags=row['tags'],
                 first_seen_at=row['first_seen_at'],
-                last_seen_at=row['last_seen_at']
+                last_seen_at=row['last_seen_at'],
+                is_duplicate=bool(row.get('is_duplicate', 0)),
+                duplicate_of_id=row.get('duplicate_of_id'),
+                similarity_score=row.get('similarity_score')
             )
             for row in rows
         ]
+
+    def mark_as_duplicate(self, result_id: int, duplicate_of_id: int,
+                         similarity_score: float = 100.0):
+        """Mark a result as a duplicate.
+
+        Args:
+            result_id: ID of the duplicate result
+            duplicate_of_id: ID of the primary result
+            similarity_score: Similarity score (0-100)
+        """
+        if not self.conn:
+            raise RuntimeError("Database connection not established")
+
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            UPDATE results
+            SET is_duplicate = 1,
+                duplicate_of_id = ?,
+                similarity_score = ?
+            WHERE id = ?
+        """, (duplicate_of_id, similarity_score, result_id))
+
+        self.conn.commit()
+
+    def delete_result(self, result_id: int):
+        """Delete a result from the database.
+
+        Args:
+            result_id: Result ID to delete
+        """
+        if not self.conn:
+            raise RuntimeError("Database connection not established")
+
+        cursor = self.conn.cursor()
+        cursor.execute("DELETE FROM results WHERE id = ?", (result_id,))
+        self.conn.commit()
