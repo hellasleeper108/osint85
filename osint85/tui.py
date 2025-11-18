@@ -22,6 +22,8 @@ from .scanner import Scanner
 from .reporting import Reporter
 from .database import Target, Query, Result
 from .config import config
+from .command_registry import command_registry, CommandCategory
+from .command_palette import CommandPalette
 
 
 # Categories for the sidebar
@@ -416,9 +418,154 @@ class OSINTApp(App):
         log = self.query_one("#event-log", EventLog)
         log.write_event("info", "OSINT-85 Command Nexus initialized")
         log.write_event("info", "Press 'p' to select a project")
+        log.write_event("info", "Press '/' to open command palette")
+
+        # Register all commands
+        self._register_commands()
 
         # Try to load last project or prompt selection
         self.action_select_project()
+
+    def _register_commands(self):
+        """Register all available commands for the palette."""
+        # Project commands
+        command_registry.register(
+            "project.select",
+            "Select Project",
+            "Switch to a different project",
+            self.action_select_project,
+            CommandCategory.PROJECT,
+            keywords=["switch", "change", "open"],
+            keybinding="p"
+        )
+
+        # Query commands
+        command_registry.register(
+            "query.generate",
+            "Generate Queries",
+            "Generate new OSINT queries with AI",
+            lambda: self._generate_queries_for_current_category(),
+            CommandCategory.QUERY,
+            keywords=["create", "ai", "dork", "search"]
+        )
+
+        # Scan commands
+        command_registry.register(
+            "scan.run",
+            "Run Scan",
+            "Execute search queries for current category",
+            lambda: self._run_scan_for_current_category(),
+            CommandCategory.SCAN,
+            keywords=["execute", "search", "collect"]
+        )
+
+        # Report commands
+        command_registry.register(
+            "report.generate",
+            "Generate Report",
+            "Create comprehensive OSINT report",
+            lambda: self._generate_report(),
+            CommandCategory.REPORT,
+            keywords=["create", "export", "summary"]
+        )
+
+        # Navigation commands
+        for cat_id, label, risk in CATEGORIES:
+            command_registry.register(
+                f"nav.category.{cat_id}",
+                f"Go to {label}",
+                f"Navigate to {label} category",
+                lambda cid=cat_id, lbl=label: self._navigate_to_category(cid, lbl),
+                CommandCategory.NAVIGATION,
+                keywords=["category", "goto", label.lower()]
+            )
+
+        # View commands
+        command_registry.register(
+            "view.refresh",
+            "Refresh View",
+            "Refresh all data and update displays",
+            self.action_refresh,
+            CommandCategory.VIEW,
+            keywords=["reload", "update"],
+            keybinding="r"
+        )
+
+        # System commands
+        command_registry.register(
+            "system.quit",
+            "Quit Application",
+            "Exit OSINT-85 Command Nexus",
+            self.action_quit,
+            CommandCategory.SYSTEM,
+            keywords=["exit", "close", "leave"],
+            keybinding="q"
+        )
+
+    def _generate_queries_for_current_category(self):
+        """Generate queries for the current category."""
+        if not self.current_project:
+            log = self.query_one("#event-log", EventLog)
+            log.write_event("error", "No project selected")
+            return
+
+        category_label = next(
+            (label for cat_id, label, _ in CATEGORIES if cat_id == self.current_category),
+            "Unknown"
+        )
+
+        self.push_screen(
+            GenerateQueriesScreen(self.current_category, category_label),
+            self.on_queries_generated
+        )
+
+    def _run_scan_for_current_category(self):
+        """Run scan for the current category."""
+        if not self.current_project:
+            log = self.query_one("#event-log", EventLog)
+            log.write_event("error", "No project selected")
+            return
+
+        self.push_screen(
+            ScanProgressScreen(self.current_category),
+            self.on_scan_complete
+        )
+
+    def _generate_report(self):
+        """Generate a report for the current project."""
+        if not self.current_project:
+            log = self.query_one("#event-log", EventLog)
+            log.write_event("error", "No project selected")
+            return
+
+        log = self.query_one("#event-log", EventLog)
+        log.write_event("info", "Generating report...")
+
+        # TODO: Implement report generation modal
+        log.write_event("success", "Report generation coming soon!")
+
+    def _navigate_to_category(self, category_id: str, category_label: str):
+        """Navigate to a specific category."""
+        self.current_category = category_id
+
+        # Update sidebar selection
+        sidebar = self.query_one("#sidebar", Sidebar)
+        for item in sidebar.query(CategoryItem):
+            item.remove_class("selected")
+            if item.category_id == category_id:
+                item.add_class("selected")
+
+        # Update query builder
+        qb = self.query_one("#query-builder", QueryBuilderPanel)
+        qb.update_category(category_id, category_label)
+
+        # Update results
+        results = self.query_one("#results", ResultGrid)
+        results.load_results(category_id)
+
+        # Log the action
+        log = self.query_one("#event-log", EventLog)
+        log.write_event("info", f"Navigated to: {category_label}")
 
     def on_category_selected(self, message: CategorySelected):
         """Handle category selection."""
@@ -522,6 +669,22 @@ class OSINTApp(App):
         results.load_results(self.current_category)
 
         log.write_event("success", "Data refreshed")
+
+    async def action_command_palette(self):
+        """Show the command palette."""
+        log = self.query_one("#event-log", EventLog)
+        log.write_event("ai", "Opening command palette...")
+
+        # Show the palette and get selected command
+        command = await self.push_screen_wait(CommandPalette())
+
+        if command:
+            log.write_event("ai", f"Executing: {command.name}")
+            try:
+                # Execute the command action
+                command.action()
+            except Exception as e:
+                log.write_event("error", f"Command failed: {e}")
 
 
 def run_tui():

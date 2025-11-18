@@ -277,3 +277,176 @@ Static {
 .info {
     color: #00d4ff;
 }
+
+/* ========================================
+   COMMAND PALETTE
+   ======================================== */
+
+/* Command Palette Container */
+CommandPalette {
+    align: center middle;
+}
+
+#palette-container {
+    width: 75;
+    height: auto;
+    max-height: 40;
+    background: #0a0c0f;
+    border: thick #00d4ff;
+    border-title-color: #00d4ff;
+    border-title-style: bold;
+    padding: 0;
+    box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
+}
+
+/* Palette Title */
+#palette-title {
+    text-style: bold;
+    color: #00d4ff;
+    background: #1b1e24;
+    padding: 1 2;
+    text-align: center;
+    border-bottom: tall #00d4ff;
+}
+
+/* Palette Input */
+#palette-input {
+    background: #14161a;
+    border: none;
+    border-bottom: tall #1b1e24;
+    color: #ffffff;
+    padding: 1 2;
+    margin: 0;
+}
+
+#palette-input:focus {
+    background: #1a1d22;
+    border-bottom: tall #00d4ff;
+}
+
+#palette-input > .input--placeholder {
+    color: #5a6370;
+    text-style: italic;
+}
+
+/* Palette Results List */
+#palette-results {
+    height: auto;
+    max-height: 25;
+    background: #0f1115;
+    border: none;
+    padding: 0;
+    margin: 0;
+}
+
+#palette-results:focus {
+    border: none;
+}
+
+/* No Results Message */
+#no-results {
+    padding: 4 2;
+    text-align: center;
+    color: #5a6370;
+    text-style: italic;
+}
+
+.hidden {
+    display: none;
+}
+
+/* Command Item Styling */
+CommandItem {
+    height: auto;
+    min-height: 5;
+    background: #0f1115;
+    border: none;
+    border-bottom: tall #1b1e24;
+    padding: 0;
+    margin: 0;
+}
+
+CommandItem:hover {
+    background: #1a1d22;
+    border-left: wide #00d4ff;
+}
+
+CommandItem.-active {
+    background: #1a2830;
+    border-left: wide #00d4ff;
+}
+
+.command-item-content {
+    padding: 1 2;
+    height: auto;
+}
+
+/* Command Item Text */
+CommandItem .command-item-content {
+    color: #ffffff;
+}
+
+CommandItem:hover .command-item-content {
+    color: #00d4ff;
+}
+
+CommandItem.-active .command-item-content {
+    color: #00d4ff;
+    text-style: bold;
+}
+
+/* Palette Animation */
+CommandPalette {
+    transition: offset 200ms;
+}
+
+CommandItem {
+    transition: background 150ms, border 150ms;
+}
+
+#palette-input {
+    transition: background 150ms, border 150ms;
+}
+
+/* Palette Focus Effects */
+#palette-input:focus {
+    box-shadow: 0 0 10px rgba(0, 212, 255, 0.2);
+}
+
+/* Command Category Colors */
+CommandItem[data-category="project"] {
+    border-left-color: #ff3366;
+}
+
+CommandItem[data-category="query"] {
+    border-left-color: #ffaa00;
+}
+
+CommandItem[data-category="scan"] {
+    border-left-color: #00ff88;
+}
+
+CommandItem[data-category="report"] {
+    border-left-color: #00d4ff;
+}
+
+CommandItem[data-category="navigation"] {
+    border-left-color: #9966ff;
+}
+
+CommandItem[data-category="view"] {
+    border-left-color: #66ffff;
+}
+
+CommandItem[data-category="system"] {
+    border-left-color: #ff6666;
+}
+
+/* Neon glow on hover */
+CommandItem:hover {
+    box-shadow: 0 0 5px rgba(0, 212, 255, 0.1);
+}
+
+CommandItem.-active {
+    box-shadow: 0 0 10px rgba(0, 212, 255, 0.2);
+}
