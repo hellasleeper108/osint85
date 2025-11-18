@@ -156,16 +156,22 @@ class QueryBuilderPanel(Container):
 
 
 class ResultGrid(DataTable):
-    """Bottom-right results table with live update support."""
+    """Bottom-right results table with live update support and lazy-loading."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Store mapping of row keys to full Result objects and query metadata
+        # Store mapping of row keys to minimal data (for memory optimization)
         self.result_data: dict = {}
         self.current_category: str = ""
         # Track user scroll state for auto-scroll
         self._user_scrolled: bool = False
         self._last_row_count: int = 0
+        # Lazy-loading state
+        self._page_size: int = 50
+        self._current_offset: int = 0
+        self._has_more: bool = False
+        self._loading: bool = False
+        self._total_results: int = 0
 
     def on_mount(self):
         self.add_columns("🔗 URL", "📋 Title", "🏷️  Tags", "📊 Score")
@@ -189,50 +195,146 @@ class ResultGrid(DataTable):
             self._user_scrolled = True
 
     def load_results(self, category_id: str):
-        """Load results for a specific category."""
+        """Load results for a specific category with lazy-loading."""
         self.clear()
         self.result_data.clear()
         self.current_category = category_id
         self._user_scrolled = False
         self._last_row_count = 0
+        self._current_offset = 0
+        self._has_more = False
+        self._loading = False
+
+        # Kick off async loading
+        self.run_worker(self._load_results_async(category_id), exclusive=True)
+
+    async def _load_results_async(self, category_id: str):
+        """Async worker to load first page of results."""
+        from .async_db import AsyncDatabase
 
         app = self.app
-        if hasattr(app, 'current_project') and app.current_project:
-            pm = ProjectManager()
-            queries = pm.list_queries(app.current_project.id)
+        if not hasattr(app, 'current_project') or not app.current_project:
+            return
 
-            # Get query IDs for this category
-            category_query_ids = [q.id for q in queries if q.category == category_id]
+        async with AsyncDatabase() as db:
+            # Count total results
+            self._total_results = await db.count_results_async(
+                app.current_project.id,
+                category=category_id,
+                exclude_duplicates=True
+            )
 
-            # Create query lookup for descriptions
+            # Load first page
+            results = await db.get_all_results_async(
+                app.current_project.id,
+                category=category_id,
+                limit=self._page_size,
+                offset=0,
+                exclude_duplicates=True
+            )
+
+            # Get queries for metadata
+            queries = await db.get_queries_by_category_async(
+                app.current_project.id,
+                category_id,
+                enabled_only=False
+            )
             query_lookup = {q.id: q for q in queries}
 
-            # Get results for these queries
-            results = []
-            for qid in category_query_ids:
-                results.extend(pm.get_results_by_query(qid))
+            # Add results to table
+            for r in results:
+                self._add_result_row(r, query_lookup, category_id)
 
-            # Add to table and store full data
-            for r in results[:50]:  # Limit to 50
-                url_short = r.url[:50] + "..." if len(r.url) > 50 else r.url
-                title_short = r.title[:40] + "..." if len(r.title) > 40 else r.title
-                score_display = "N/A"
+            # Update pagination state
+            self._current_offset = len(results)
+            self._has_more = self._current_offset < self._total_results
 
-                # Add duplicate indicator
-                if r.is_duplicate:
-                    url_short = f"🔗 {url_short}"  # Chain link emoji for duplicates
-                    if r.similarity_score:
-                        score_display = f"{r.similarity_score:.0f}%"
+    def _add_result_row(self, result: "Result", query_lookup: dict, category_id: str):
+        """Add a single result row to the table (optimized for memory)."""
+        url_short = result.url[:50] + "..." if len(result.url) > 50 else result.url
+        title_short = result.title[:40] + "..." if len(result.title) > 40 else result.title
+        score_display = "N/A"
 
-                row_key = self.add_row(url_short, title_short, r.tags or "-", score_display)
+        # Add duplicate indicator
+        if result.is_duplicate:
+            url_short = f"🔗 {url_short}"
+            if result.similarity_score:
+                score_display = f"{result.similarity_score:.0f}%"
 
-                # Store full result data with query metadata
-                query = query_lookup.get(r.query_id)
-                self.result_data[row_key] = {
-                    "result": r,
-                    "query_description": query.description if query else "",
-                    "category": category_id
-                }
+        row_key = self.add_row(url_short, title_short, result.tags or "-", score_display)
+
+        # Store only minimal data (result ID + metadata) to reduce memory
+        query = query_lookup.get(result.query_id)
+        self.result_data[row_key] = {
+            "result_id": result.id,  # Store ID instead of full object
+            "query_id": result.query_id,
+            "query_description": query.description if query else "",
+            "category": category_id,
+            # Keep essential display data
+            "url": result.url,
+            "title": result.title,
+            "snippet": result.snippet,
+            "tags": result.tags,
+        }
+
+    async def load_more_results(self):
+        """Load next page of results when scrolling."""
+        if self._loading or not self._has_more:
+            return
+
+        self._loading = True
+        from .async_db import AsyncDatabase
+
+        app = self.app
+        if not hasattr(app, 'current_project') or not app.current_project:
+            self._loading = False
+            return
+
+        async with AsyncDatabase() as db:
+            # Load next page
+            results = await db.get_all_results_async(
+                app.current_project.id,
+                category=self.current_category,
+                limit=self._page_size,
+                offset=self._current_offset,
+                exclude_duplicates=True
+            )
+
+            # Get queries for metadata
+            queries = await db.get_queries_by_category_async(
+                app.current_project.id,
+                self.current_category,
+                enabled_only=False
+            )
+            query_lookup = {q.id: q for q in queries}
+
+            # Add results to table
+            for r in results:
+                self._add_result_row(r, query_lookup, self.current_category)
+
+            # Update pagination state
+            self._current_offset += len(results)
+            self._has_more = self._current_offset < self._total_results
+
+        self._loading = False
+
+    def watch_scroll_y(self, old_value: float, new_value: float) -> None:
+        """Track scroll and trigger lazy-loading when near bottom."""
+        # If rows were just added and scroll moved to bottom, that's auto-scroll
+        if self.row_count > self._last_row_count:
+            self._last_row_count = self.row_count
+            return
+
+        # Check if scrolled near bottom (within 10% of max)
+        if new_value > old_value:  # Scrolling down
+            max_scroll = self.max_scroll_y
+            if max_scroll > 0 and new_value >= max_scroll * 0.9:
+                # Trigger lazy-load
+                self.run_worker(self.load_more_results())
+
+        # Track user scroll state
+        if old_value != new_value:
+            self._user_scrolled = True
 
     def add_live_result(self, live_result: LiveResult, query_description: str = "") -> None:
         """Add a result in real-time during a live scan.
@@ -288,16 +390,33 @@ class ResultGrid(DataTable):
                 try:
                     row_key = self.get_row_at(self.cursor_row)[0]
                     if row_key in self.result_data:
-                        # Get the full result data
                         data = self.result_data[row_key]
-                        # Open detail view
-                        self.app.open_result_detail(
-                            data["result"],
-                            data["query_description"],
-                            data["category"]
-                        )
+                        # Fetch full result and open detail view async
+                        self.run_worker(self._open_result_detail_async(data))
                 except Exception:
                     pass  # Ignore errors if no row selected
+
+    async def _open_result_detail_async(self, data: dict):
+        """Async worker to load full result and open detail view."""
+        from .async_db import AsyncDatabase
+        from .database import Result
+
+        # Create Result object from stored minimal data
+        result = Result(
+            id=data["result_id"],
+            query_id=data["query_id"],
+            url=data["url"],
+            title=data["title"],
+            snippet=data["snippet"],
+            tags=data["tags"]
+        )
+
+        # Open detail view with the result
+        self.app.open_result_detail(
+            result,
+            data["query_description"],
+            data["category"]
+        )
 
 
 class EventLog(Log):

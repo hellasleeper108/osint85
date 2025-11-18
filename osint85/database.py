@@ -52,7 +52,7 @@ class Result:
 class Database:
     """SQLite database manager for osint85 projects."""
 
-    SCHEMA_VERSION = 2  # Updated for deduplication support
+    SCHEMA_VERSION = 3  # Updated for performance optimizations
 
     def __init__(self, db_path: str = ".osint85/project.db"):
         """Initialize database connection.
@@ -121,14 +121,15 @@ class Database:
             )
         """)
 
-        # Create indexes
+        # Create indexes for performance
+        # Basic foreign key indexes
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_queries_target ON queries(target_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_results_query ON results(query_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_results_url ON results(url)")
 
         self.conn.commit()
 
-        # Run migrations
+        # Run migrations (additional indexes added in v3)
         self._migrate_schema()
 
     def _migrate_schema(self):
@@ -165,6 +166,37 @@ class Database:
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_results_duplicate
             ON results(is_duplicate, duplicate_of_id)
+        """)
+
+        # Performance indexes (added in schema v3)
+        # Index for category-based query filtering
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_queries_category
+            ON queries(category)
+        """)
+
+        # Compound index for common query patterns
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_queries_target_category
+            ON queries(target_id, category)
+        """)
+
+        # Index for enabled queries
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_queries_enabled
+            ON queries(enabled)
+        """)
+
+        # Index for result timestamps (for sorting)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_results_first_seen
+            ON results(first_seen_at DESC)
+        """)
+
+        # Index for filtering non-duplicates
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_results_not_duplicate
+            ON results(is_duplicate) WHERE is_duplicate = 0
         """)
 
         self.conn.commit()

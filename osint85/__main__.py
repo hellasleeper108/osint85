@@ -703,6 +703,181 @@ def dedupe_stats(
         raise typer.Exit(1)
 
 
+# Performance profiling commands
+
+@app.command()
+def perf_profile(
+    project_id: Optional[int] = typer.Option(None, "--project", "-p", help="Project ID"),
+    save: Optional[str] = typer.Option(None, "--save", "-s", help="Save report to file")
+):
+    """Show performance profiling statistics."""
+    from .perf import get_profiler, get_cache_manager, DatabaseProfiler
+    from pathlib import Path
+    import json
+
+    pid = _ensure_project(project_id)
+    pm = _get_project_manager()
+    project = pm.get_project(pid)
+
+    console.print(f"[cyan]Performance Profile for: {project.name}[/cyan]\n")
+
+    # Get profiler stats
+    profiler = get_profiler()
+    stats = profiler.get_stats()
+
+    # Overall stats table
+    table = Table(title="Overall Performance")
+    table.add_column("Metric", style="cyan")
+    table.add_column("Value", style="green")
+
+    table.add_row("Total Operations", str(stats.total_operations))
+    table.add_row("Total Duration", f"{stats.total_duration:.2f}s")
+    table.add_row("Average Duration", f"{stats.avg_duration:.3f}s")
+    if stats.min_duration != float('inf'):
+        table.add_row("Min Duration", f"{stats.min_duration:.3f}s")
+    table.add_row("Max Duration", f"{stats.max_duration:.3f}s")
+
+    console.print(table)
+    console.print()
+
+    # Operation breakdown
+    ops_table = Table(title="Operation Breakdown")
+    ops_table.add_column("Operation", style="cyan")
+    ops_table.add_column("Count", style="yellow")
+    ops_table.add_column("Total Time", style="green")
+
+    ops_table.add_row("Database Queries", str(stats.db_queries), f"{stats.db_time:.2f}s")
+    ops_table.add_row("LLM Calls", str(stats.llm_calls), f"{stats.llm_time:.2f}s")
+    ops_table.add_row("API Calls", str(stats.api_calls), f"{stats.api_time:.2f}s")
+
+    console.print(ops_table)
+    console.print()
+
+    # Cache stats
+    cache_table = Table(title="Cache Performance")
+    cache_table.add_column("Metric", style="cyan")
+    cache_table.add_column("Value", style="green")
+
+    cache_table.add_row("Cache Hits", str(stats.cache_hits))
+    cache_table.add_row("Cache Misses", str(stats.cache_misses))
+    cache_table.add_row("Hit Rate", f"{stats.cache_hit_rate:.1f}%")
+
+    console.print(cache_table)
+    console.print()
+
+    # Slowest operations
+    slowest = profiler.get_slowest_operations(10)
+    if slowest:
+        slow_table = Table(title="Slowest Operations (Top 10)")
+        slow_table.add_column("Operation", style="cyan")
+        slow_table.add_column("Duration", style="yellow")
+        slow_table.add_column("Details", style="dim")
+
+        for op in slowest:
+            details = ", ".join(f"{k}={v}" for k, v in op.metadata.items()) if op.metadata else "-"
+            slow_table.add_row(
+                op.operation,
+                f"{op.duration:.3f}s" if op.duration else "N/A",
+                details[:50]
+            )
+
+        console.print(slow_table)
+        console.print()
+
+    # Save to file if requested
+    if save:
+        output_path = Path(save)
+        profiler.save_to_file(output_path)
+        console.print(f"[green]✓[/green] Performance report saved to: {output_path}")
+
+
+@app.command()
+def perf_cache():
+    """Show cache statistics."""
+    from .cache import get_cache_manager
+
+    console.print("[cyan]Cache Statistics[/cyan]\n")
+
+    cache_manager = get_cache_manager()
+    cache_stats = cache_manager.get_global_stats()
+
+    for cache_type, stats in cache_stats.items():
+        table = Table(title=f"{cache_type.upper()} Cache")
+        table.add_column("Metric", style="cyan")
+        table.add_column("Value", style="green")
+
+        for key, value in stats.items():
+            table.add_row(key.replace('_', ' ').title(), str(value))
+
+        console.print(table)
+        console.print()
+
+
+@app.command()
+def perf_db(
+    project_id: Optional[int] = typer.Option(None, "--project", "-p", help="Project ID")
+):
+    """Show database performance statistics."""
+    from .perf import DatabaseProfiler
+
+    pid = _ensure_project(project_id)
+    pm = _get_project_manager()
+    project = pm.get_project(pid)
+
+    console.print(f"[cyan]Database Performance for: {project.name}[/cyan]\n")
+
+    # Get database stats
+    db_profiler = DatabaseProfiler(".osint85/project.db")
+    stats = db_profiler.get_query_stats()
+
+    # Table counts
+    table = Table(title="Database Statistics")
+    table.add_column("Metric", style="cyan")
+    table.add_column("Value", style="green")
+
+    table.add_row("Database Size", f"{stats.get('db_size_mb', 0):.2f} MB")
+    table.add_row("Targets", str(stats.get('targets_count', 0)))
+    table.add_row("Queries", str(stats.get('queries_count', 0)))
+    table.add_row("Results", str(stats.get('results_count', 0)))
+    table.add_row("Indexes", str(stats.get('index_count', 0)))
+
+    console.print(table)
+    console.print()
+
+    # Table sizes
+    size_table = Table(title="Table Sizes")
+    size_table.add_column("Table", style="cyan")
+    size_table.add_column("Size (KB)", style="green")
+
+    for table_name in ["targets", "queries", "results"]:
+        size_key = f"{table_name}_size_kb"
+        if size_key in stats:
+            size_table.add_row(table_name.title(), f"{stats[size_key]:.2f}")
+
+    console.print(size_table)
+    console.print()
+
+    # Indexes
+    if stats.get('indexes'):
+        idx_table = Table(title="Database Indexes")
+        idx_table.add_column("Index Name", style="cyan")
+        idx_table.add_column("Table", style="yellow")
+
+        for idx in stats['indexes']:
+            idx_table.add_row(idx['name'], idx['table'])
+
+        console.print(idx_table)
+        console.print()
+
+    # Performance analysis
+    analysis = db_profiler.analyze_query_performance()
+    if analysis.get('recommendations'):
+        console.print("[yellow]Recommendations:[/yellow]")
+        for rec in analysis['recommendations']:
+            console.print(f"  • {rec}")
+        console.print()
+
+
 @app.command()
 def tui():
     """Launch the interactive TUI (Terminal User Interface)."""
