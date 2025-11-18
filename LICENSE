@@ -1,0 +1,74 @@
+MIT License
+
+Copyright (c) 2025 osint85 contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+LEGAL DISCLAIMER AND TERMS OF USE
+
+osint85 is a security reconnaissance tool designed for authorized use only.
+
+BY USING THIS SOFTWARE, YOU AGREE TO:
+
+1. AUTHORIZED USE ONLY
+   - Use this software only on systems you own or have explicit written
+     permission to test
+   - Obtain proper authorization before any reconnaissance activities
+   - Comply with all applicable laws and regulations
+   - Respect terms of service of all APIs and search engines
+
+2. PROHIBITED ACTIVITIES
+   - Do not use this software for unauthorized reconnaissance or scanning
+   - Do not use this software to violate any laws, regulations, or terms of
+     service
+   - Do not use this software for malicious, illegal, or unethical purposes
+   - Do not use this software to exploit or attack systems
+
+3. LIABILITY AND RESPONSIBILITY
+   - You are solely responsible for your use of this software
+   - The authors and contributors assume NO LIABILITY for misuse, damages,
+     or legal consequences resulting from use of this software
+   - The authors and contributors make NO WARRANTIES about the security,
+     accuracy, or reliability of this software
+
+4. COMPLIANCE
+   - You are responsible for ensuring your use complies with:
+     - Computer Fraud and Abuse Act (CFAA) and similar laws worldwide
+     - Terms of service of search APIs and LLM providers
+     - Bug bounty program rules and scope definitions
+     - Privacy laws (GDPR, CCPA, etc.)
+     - Professional codes of conduct
+
+5. ETHICAL USE
+   - Use findings for defensive security purposes only
+   - Report vulnerabilities responsibly
+   - Do not publish findings without proper authorization
+   - Respect rate limits and avoid disruption
+
+THE AUTHORS AND CONTRIBUTORS OF THIS SOFTWARE:
+- Provide this software "as is" without warranty
+- Assume no liability for any damages or legal issues
+- Do not endorse or condone unauthorized or illegal use
+- Reserve the right to update these terms at any time
+
+If you do not agree to these terms, do not use this software.
+
+For questions or concerns, please contact the project maintainers.

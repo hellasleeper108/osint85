@@ -3,8 +3,28 @@
 ## Repository Overview
 
 **Repository:** osint85
-**Purpose:** [To be defined - appears to be related to OSINT (Open Source Intelligence) tools/utilities]
-**Status:** New repository - Initial setup phase
+**Purpose:** Terminal-based OSINT assistant with LLM-powered dork generation
+**Language:** Python 3.10+
+**Status:** Active development
+
+## What is osint85?
+
+osint85 is a terminal-based OSINT (Open Source Intelligence) assistant that combines the power of LLMs with advanced search operators for defensive security and authorized reconnaissance.
+
+**Key Features:**
+- Natural language target profiling
+- LLM-powered generation of search operator queries ("dorks")
+- Automated search API integration (no direct SERP scraping)
+- Result aggregation, tagging, and filtering
+- AI-powered summarization and reporting
+- Project-based workflow with SQLite storage
+- Clean terminal interface (optional TUI later)
+
+**Use Cases:**
+- Bug bounty reconnaissance (authorized targets only)
+- Internal security audits
+- Defensive security assessments
+- Educational/lab environments
 
 This document serves as a comprehensive guide for AI assistants working on this codebase.
 
@@ -25,38 +45,54 @@ This document serves as a comprehensive guide for AI assistants working on this 
 
 ## Codebase Structure
 
-### Current State
-This is a new repository. As the codebase develops, maintain the following structure:
+### Project Layout
 
 ```
 osint85/
-├── src/                    # Source code
-│   ├── lib/               # Reusable library code
-│   ├── utils/             # Utility functions
-│   ├── services/          # Business logic services
-│   └── index.ts/js        # Main entry point
-├── tests/                 # Test files
-│   ├── unit/             # Unit tests
-│   ├── integration/      # Integration tests
-│   └── fixtures/         # Test data/fixtures
-├── docs/                  # Additional documentation
-├── scripts/              # Build and utility scripts
-├── examples/             # Usage examples
-├── .github/              # GitHub workflows and templates
-├── package.json          # Dependencies (if Node.js)
-├── requirements.txt      # Dependencies (if Python)
-├── README.md             # Project overview
-├── CHANGELOG.md          # Version history
-├── CONTRIBUTING.md       # Contribution guidelines
-└── CLAUDE.md            # This file
+├── osint85/                 # Main Python package
+│   ├── __init__.py         # Package initialization
+│   ├── __main__.py         # CLI entry point
+│   ├── project.py          # Project & target management
+│   ├── dorks.py            # LLM-powered dork generation
+│   ├── scanner.py          # Search API client & result processing
+│   ├── reporting.py        # LLM summarization & markdown reports
+│   ├── database.py         # SQLite schema & migrations
+│   ├── config.py           # Configuration management
+│   └── llm_client.py       # LLM API integration (Anthropic, OpenAI, etc.)
+├── tests/                   # Test suite
+│   ├── unit/               # Unit tests for each module
+│   ├── integration/        # Integration tests
+│   └── fixtures/           # Test data & mock responses
+├── docs/                    # Documentation
+│   └── architecture.md     # Architecture diagrams & decisions
+├── examples/                # Usage examples
+│   └── sample_session.md   # Example CLI workflow
+├── .osint85/               # Per-project data (gitignored)
+│   └── project.db          # SQLite database for each project
+├── requirements.txt         # Python dependencies
+├── setup.py                # Package installation
+├── .env.example            # Environment variable template
+├── .gitignore              # Git ignore patterns
+├── README.md               # Project overview & getting started
+├── CHANGELOG.md            # Version history
+├── LICENSE                 # License (MIT recommended)
+└── CLAUDE.md               # This file
 ```
 
-### Key Directories
+### Key Directories & Files
 
-- **src/**: All production source code
-- **tests/**: Comprehensive test suite with clear organization
-- **docs/**: Extended documentation, architecture diagrams, API references
-- **scripts/**: Automation scripts for development tasks
+- **osint85/**: Core Python package containing all application logic
+  - `__main__.py`: CLI interface using Typer
+  - `project.py`: Project/target management, SQLite interaction
+  - `dorks.py`: LLM prompt engineering for query generation
+  - `scanner.py`: Search API abstraction & result processing
+  - `reporting.py`: Report generation with LLM summarization
+  - `database.py`: Database schema, migrations, models
+  - `llm_client.py`: Unified LLM client supporting multiple providers
+
+- **tests/**: Comprehensive test coverage with mocked LLM/API responses
+- **.osint85/**: Runtime project data (one DB per project, gitignored)
+- **examples/**: Real-world usage examples and tutorials
 
 ---
 
@@ -623,25 +659,140 @@ LOG_LEVEL=debug
 
 ## Project-Specific Guidelines
 
-### OSINT Focus
+### Architecture Overview
 
-Given the repository name "osint85", this project likely involves OSINT (Open Source Intelligence) tools. When working on this codebase:
+osint85 follows a modular pipeline architecture:
 
-1. **Privacy & Ethics**: Respect privacy laws and ethical boundaries
-2. **Data Sources**: Document all data sources clearly
-3. **Rate Limiting**: Implement rate limiting for API calls
-4. **Caching**: Cache results to minimize redundant requests
-5. **Attribution**: Properly attribute data sources
-6. **Compliance**: Ensure compliance with ToS of data sources
+```
+User Input → Profile → LLM → Dorks → Search API → Results → LLM → Report
+```
 
-### Best Practices for OSINT Tools
+**Component Responsibilities:**
 
-- **Modular Design**: Separate data collection, processing, and presentation
-- **Configurable**: Allow users to configure data sources and parameters
-- **Logging**: Comprehensive logging for audit trails
-- **Error Resilience**: Handle API failures and rate limits gracefully
-- **Data Validation**: Validate and sanitize all collected data
-- **Export Formats**: Support multiple export formats (JSON, CSV, etc.)
+1. **Project Manager** (`project.py`):
+   - SQLite CRUD operations for targets, queries, results
+   - Project lifecycle management
+   - Scope validation
+
+2. **Dork Generator** (`dorks.py`):
+   - LLM prompt engineering for query generation
+   - Structured JSON output parsing
+   - Query categorization and risk scoring
+
+3. **Scanner** (`scanner.py`):
+   - Search API abstraction layer
+   - Result deduplication and tagging
+   - Rate limiting and retry logic
+
+4. **Reporter** (`reporting.py`):
+   - LLM-powered summarization
+   - Markdown/HTML report generation
+   - Findings categorization
+
+5. **LLM Client** (`llm_client.py`):
+   - Unified interface for multiple providers (Anthropic, OpenAI)
+   - Prompt templating and response parsing
+   - Error handling and retries
+
+### OSINT-Specific Best Practices
+
+**Legal & Ethical Requirements:**
+
+1. **Authorized Use Only**: Use only on assets you own or have explicit permission to test
+2. **Bug Bounty Compliance**: Respect scope definitions in bug bounty programs
+3. **No Exploitation**: Discovery and reporting only - no active exploitation
+4. **Privacy Laws**: Comply with GDPR, CCPA, and local privacy regulations
+5. **Terms of Service**: Respect search API ToS and rate limits
+
+**Technical Best Practices:**
+
+- **Modular Design**: Clear separation between data collection, processing, and presentation
+- **Configurable Scope**: Per-project scope definitions to prevent out-of-bounds searches
+- **Rate Limiting**: Respect API limits; implement exponential backoff
+- **Caching**: Cache search results to minimize redundant API calls
+- **Audit Trails**: Log all queries and results for accountability
+- **Data Sanitization**: Validate and sanitize all external data
+- **Error Resilience**: Graceful handling of API failures and timeouts
+
+**Safety Checklist:**
+
+- [ ] Project scope clearly defined
+- [ ] Authorization documented
+- [ ] No automated exploitation features
+- [ ] Rate limiting implemented
+- [ ] Results stored securely
+- [ ] Sensitive data handling procedures in place
+- [ ] Disclaimer visible in README and CLI
+
+### LLM Integration Patterns
+
+**Dork Generation Prompt:**
+
+```python
+SYSTEM_PROMPT = """
+You generate advanced search-operator queries for open-source recon and defensive security.
+You only generate queries and short metadata in pure JSON.
+Never include instructions, prose, or comments.
+Respond strictly as:
+{
+  "queries": [
+    {
+      "category": "string",
+      "risk_level": "low|medium|high",
+      "description": "short human description",
+      "query": "search operator query string here"
+    }
+  ]
+}
+"""
+
+USER_PROMPT = {
+  "target": {
+    "name": "...",
+    "primary_domain": "...",
+    "scope": "...",
+    "notes": "..."
+  },
+  "goal": "..."
+}
+```
+
+**Report Generation Prompt:**
+
+```python
+SYSTEM_PROMPT = """
+You are a defensive security analyst.
+You receive URLs & snippets from advanced search queries.
+Group by category, describe implications, suggest mitigations.
+Respond in markdown, concise, no exploitation steps.
+This is for internal audit/awareness, not attack.
+"""
+```
+
+### Development Priorities
+
+**Phase 1 - MVP:**
+- [x] Project structure
+- [ ] SQLite schema
+- [ ] CLI with basic commands
+- [ ] LLM client integration
+- [ ] Basic dork generation
+- [ ] Search API client (with mock for testing)
+- [ ] Simple reporting
+
+**Phase 2 - Enhancement:**
+- [ ] Result tagging & scoring
+- [ ] Advanced filtering
+- [ ] Multiple LLM provider support
+- [ ] Export to JSON/CSV
+- [ ] Improved error handling
+
+**Phase 3 - Polish:**
+- [ ] TUI with Rich/Textual
+- [ ] Interactive result browsing
+- [ ] Result deduplication improvements
+- [ ] Performance optimization
+- [ ] Comprehensive testing
 
 ---
 
@@ -667,30 +818,41 @@ This CLAUDE.md should be kept up to date as the project evolves:
 ```bash
 # Setup
 git clone <repo-url> && cd osint85
-[npm install / pip install -r requirements.txt / go mod download]
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
+pip install -e .  # Install in editable mode
+
+# Environment
+cp .env.example .env
+# Edit .env with your API keys
+
+# Usage
+osint85 init --name "My Project" --domain example.com
+osint85 dorks generate --goal "Find exposed backups"
+osint85 scan run --max-results 30
+osint85 results list
+osint85 report generate --out report.md
 
 # Development
 git checkout -b feature/my-feature
-[npm run dev / python main.py / go run .]
-
-# Testing
-[npm test / pytest / go test ./...]
+python -m pytest tests/  # Run tests
+flake8 osint85/          # Lint
+black osint85/           # Format
 
 # Commit
 git add .
 git commit -m "feat: add new feature"
 git push -u origin feature/my-feature
-
-# CI/CD
-[npm run lint / flake8 / golangci-lint run]
-[npm run build / python setup.py build / go build]
 ```
 
 ### Key Files to Review
 
-- `README.md`: Project overview and getting started
-- `CONTRIBUTING.md`: How to contribute
-- `package.json` / `requirements.txt` / `go.mod`: Dependencies
+- `README.md`: Project overview, getting started, safety disclaimers
+- `requirements.txt`: Python dependencies
+- `osint85/__main__.py`: CLI entry point and command definitions
+- `osint85/database.py`: Database schema and models
+- `.env.example`: Required environment variables
 - `.github/workflows/`: CI/CD configuration
 - `tests/`: Test suite organization
 
