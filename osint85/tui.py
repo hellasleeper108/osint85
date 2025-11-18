@@ -24,6 +24,7 @@ from .database import Target, Query, Result
 from .config import config
 from .command_registry import command_registry, CommandCategory
 from .command_palette import CommandPalette
+from .result_detail_view import ResultDetailView
 
 
 # Categories for the sidebar
@@ -154,6 +155,12 @@ class QueryBuilderPanel(Container):
 class ResultGrid(DataTable):
     """Bottom-right results table."""
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Store mapping of row keys to full Result objects and query metadata
+        self.result_data: dict = {}
+        self.current_category: str = ""
+
     def on_mount(self):
         self.add_columns("🔗 URL", "📋 Title", "🏷️  Tags")
         self.cursor_type = "row"
@@ -162,6 +169,8 @@ class ResultGrid(DataTable):
     def load_results(self, category_id: str):
         """Load results for a specific category."""
         self.clear()
+        self.result_data.clear()
+        self.current_category = category_id
 
         app = self.app
         if hasattr(app, 'current_project') and app.current_project:
@@ -171,16 +180,46 @@ class ResultGrid(DataTable):
             # Get query IDs for this category
             category_query_ids = [q.id for q in queries if q.category == category_id]
 
+            # Create query lookup for descriptions
+            query_lookup = {q.id: q for q in queries}
+
             # Get results for these queries
             results = []
             for qid in category_query_ids:
                 results.extend(pm.get_results_by_query(qid))
 
-            # Add to table
+            # Add to table and store full data
             for r in results[:50]:  # Limit to 50
                 url_short = r.url[:50] + "..." if len(r.url) > 50 else r.url
                 title_short = r.title[:40] + "..." if len(r.title) > 40 else r.title
-                self.add_row(url_short, title_short, r.tags or "-")
+                row_key = self.add_row(url_short, title_short, r.tags or "-")
+
+                # Store full result data with query metadata
+                query = query_lookup.get(r.query_id)
+                self.result_data[row_key] = {
+                    "result": r,
+                    "query_description": query.description if query else "",
+                    "category": category_id
+                }
+
+    def on_key(self, event: events.Key) -> None:
+        """Handle key press events."""
+        if event.key == "enter":
+            # Get the currently selected row
+            if self.cursor_row is not None:
+                try:
+                    row_key = self.get_row_at(self.cursor_row)[0]
+                    if row_key in self.result_data:
+                        # Get the full result data
+                        data = self.result_data[row_key]
+                        # Open detail view
+                        self.app.open_result_detail(
+                            data["result"],
+                            data["query_description"],
+                            data["category"]
+                        )
+                except Exception:
+                    pass  # Ignore errors if no row selected
 
 
 class EventLog(Log):
@@ -685,6 +724,30 @@ class OSINTApp(App):
                 command.action()
             except Exception as e:
                 log.write_event("error", f"Command failed: {e}")
+
+    def log_event(self, event_type: str, message: str):
+        """Helper method to write events to the log.
+
+        Args:
+            event_type: Type of event (info, success, error, scan, ai)
+            message: Event message
+        """
+        log = self.query_one("#event-log", EventLog)
+        log.write_event(event_type, message)
+
+    def open_result_detail(self, result: Result, query_description: str = "", category: str = ""):
+        """Open the result detail view modal.
+
+        Args:
+            result: The Result object to display
+            query_description: Description of the query that generated this result
+            category: Category of the query
+        """
+        log = self.query_one("#event-log", EventLog)
+        log.write_event("info", f"Opening detail view for: {result.url[:50]}...")
+
+        # Push the detail view modal
+        self.push_screen(ResultDetailView(result, query_description, category))
 
 
 def run_tui():
