@@ -1,5 +1,7 @@
 """Terminal User Interface for osint85 using Textual."""
 
+import asyncio
+import time
 from typing import Optional, List
 from datetime import datetime
 
@@ -25,6 +27,7 @@ from .config import config
 from .command_registry import command_registry, CommandCategory
 from .command_palette import CommandPalette
 from .result_detail_view import ResultDetailView
+from .async_scanner import ScanTaskRunner, LiveResult, ScanProgress, ScanStatus
 
 
 # Categories for the sidebar
@@ -153,24 +156,45 @@ class QueryBuilderPanel(Container):
 
 
 class ResultGrid(DataTable):
-    """Bottom-right results table."""
+    """Bottom-right results table with live update support."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Store mapping of row keys to full Result objects and query metadata
         self.result_data: dict = {}
         self.current_category: str = ""
+        # Track user scroll state for auto-scroll
+        self._user_scrolled: bool = False
+        self._last_row_count: int = 0
 
     def on_mount(self):
-        self.add_columns("🔗 URL", "📋 Title", "🏷️  Tags")
+        self.add_columns("🔗 URL", "📋 Title", "🏷️  Tags", "📊 Score")
         self.cursor_type = "row"
         self.zebra_stripes = True
+
+    def watch_scroll_y(self, old_value: float, new_value: float) -> None:
+        """Track if user has manually scrolled.
+
+        Args:
+            old_value: Previous scroll position
+            new_value: New scroll position
+        """
+        # If rows were just added and scroll moved to bottom, that's auto-scroll
+        if self.row_count > self._last_row_count:
+            self._last_row_count = self.row_count
+            return
+
+        # Otherwise, user scrolled manually
+        if old_value != new_value:
+            self._user_scrolled = True
 
     def load_results(self, category_id: str):
         """Load results for a specific category."""
         self.clear()
         self.result_data.clear()
         self.current_category = category_id
+        self._user_scrolled = False
+        self._last_row_count = 0
 
         app = self.app
         if hasattr(app, 'current_project') and app.current_project:
@@ -192,7 +216,8 @@ class ResultGrid(DataTable):
             for r in results[:50]:  # Limit to 50
                 url_short = r.url[:50] + "..." if len(r.url) > 50 else r.url
                 title_short = r.title[:40] + "..." if len(r.title) > 40 else r.title
-                row_key = self.add_row(url_short, title_short, r.tags or "-")
+                score_display = "N/A"
+                row_key = self.add_row(url_short, title_short, r.tags or "-", score_display)
 
                 # Store full result data with query metadata
                 query = query_lookup.get(r.query_id)
@@ -201,6 +226,52 @@ class ResultGrid(DataTable):
                     "query_description": query.description if query else "",
                     "category": category_id
                 }
+
+    def add_live_result(self, live_result: LiveResult, query_description: str = "") -> None:
+        """Add a result in real-time during a live scan.
+
+        Args:
+            live_result: LiveResult object from async scanner
+            query_description: Description of the query
+        """
+        # Format data for display
+        url_short = live_result.url[:50] + "..." if len(live_result.url) > 50 else live_result.url
+        title_short = live_result.title[:40] + "..." if len(live_result.title) > 40 else live_result.title
+        tags_display = live_result.tags or "-"
+        score_display = f"{live_result.score}/100"
+
+        # Add row with animation (styling handled by CSS)
+        row_key = self.add_row(url_short, title_short, tags_display, score_display)
+
+        # Create Result object for detail view
+        result = Result(
+            id=None,
+            query_id=live_result.query_id,
+            url=live_result.url,
+            title=live_result.title,
+            snippet=live_result.snippet,
+            source_engine=live_result.source_engine,
+            tags=live_result.tags,
+            first_seen_at=live_result.timestamp,
+            last_seen_at=live_result.timestamp
+        )
+
+        # Store full result data
+        self.result_data[row_key] = {
+            "result": result,
+            "query_description": query_description,
+            "category": live_result.category
+        }
+
+        # Auto-scroll to bottom unless user has scrolled manually
+        if not self._user_scrolled:
+            self.scroll_end(animate=False)
+            self._last_row_count = self.row_count
+
+    def reset_scroll_tracking(self) -> None:
+        """Reset scroll tracking (e.g., when starting a new scan)."""
+        self._user_scrolled = False
+        self._last_row_count = self.row_count
 
     def on_key(self, event: events.Key) -> None:
         """Handle key press events."""
@@ -415,6 +486,148 @@ class ScanProgressScreen(ModalScreen):
             self.dismiss(0)
 
 
+class LiveScanScreen(ModalScreen):
+    """Modal screen for live async scanning with real-time results."""
+
+    BINDINGS = [("escape", "request_stop", "Stop")]
+
+    def __init__(self, category_id: str, category_label: str):
+        super().__init__()
+        self.category_id = category_id
+        self.category_label = category_label
+        self.scan_runner: Optional[ScanTaskRunner] = None
+        self._scan_task: Optional[asyncio.Task] = None
+        self._results_count = 0
+        self._start_time = 0
+
+    def compose(self) -> ComposeResult:
+        with Container(id="live-scan-modal"):
+            yield Static(f"🔴 LIVE SCAN - {self.category_label}", classes="modal-title")
+            yield Label("Status: Initializing...", id="live-scan-status")
+            yield Label("Results: 0", id="live-scan-count")
+            yield Horizontal(
+                Button("Stop Scan", id="btn-stop-scan", variant="error"),
+                classes="button-row"
+            )
+
+    def on_mount(self):
+        """Start live scan on mount."""
+        self._start_time = time.time()
+        self._scan_task = asyncio.create_task(self.run_live_scan())
+
+    async def run_live_scan(self):
+        """Run the async live scan."""
+        status_label = self.query_one("#live-scan-status", Label)
+        count_label = self.query_one("#live-scan-count", Label)
+
+        try:
+            app = self.app
+            if not hasattr(app, 'current_project') or not app.current_project:
+                status_label.update("[red]Status: No project selected[/red]")
+                await asyncio.sleep(2)
+                self.dismiss(0)
+                return
+
+            # Log scan start
+            if hasattr(app, 'log_event'):
+                app.log_event("scan", f"Live scan started for: {self.category_label}")
+
+            # Get enabled queries for this category
+            pm = ProjectManager()
+            queries = pm.get_enabled_queries(app.current_project.id)
+            category_queries = [q for q in queries if q.category == self.category_id]
+
+            if not category_queries:
+                status_label.update("[yellow]Status: No enabled queries for this category[/yellow]")
+                if hasattr(app, 'log_event'):
+                    app.log_event("error", "No enabled queries found")
+                await asyncio.sleep(2)
+                self.dismiss(0)
+                return
+
+            # Create query lookup for descriptions
+            query_lookup = {q.id: q for q in category_queries}
+
+            # Initialize scan runner
+            self.scan_runner = ScanTaskRunner(pm, mock=True)
+
+            # Update status
+            status_label.update(f"[cyan]Status: Running {len(category_queries)} queries...[/cyan]")
+
+            # Reset scroll tracking on result grid
+            results_grid = app.query_one("#results", ResultGrid)
+            results_grid.reset_scroll_tracking()
+
+            # Stream results as they arrive
+            async for item in self.scan_runner.run_category_scan(
+                app.current_project,
+                self.category_id,
+                max_results=20,
+                delay=0.3
+            ):
+                if isinstance(item, LiveResult):
+                    # We got a new result!
+                    self._results_count += 1
+
+                    # Add to results grid in real-time
+                    query = query_lookup.get(item.query_id)
+                    query_desc = query.description if query else ""
+                    results_grid.add_live_result(item, query_desc)
+
+                    # Update count
+                    count_label.update(f"Results: {self._results_count}")
+
+                    # Log to event log
+                    if hasattr(app, 'log_event'):
+                        app.log_event("success", f"Received result: {item.url[:50]}...")
+
+                elif isinstance(item, ScanProgress):
+                    # Progress update
+                    if item.status == ScanStatus.RUNNING:
+                        status_label.update(f"[cyan]Status: {item.query_description}[/cyan]")
+                    elif item.status == ScanStatus.COMPLETED:
+                        if item.query_id == 0:
+                            # Final completion message
+                            status_label.update(f"[green]Status: {item.query_description}[/green]")
+                            if hasattr(app, 'log_event'):
+                                elapsed = time.time() - self._start_time
+                                app.log_event("success", f"Scan completed in {elapsed:.1f} seconds")
+                            await asyncio.sleep(2)
+                            self.dismiss(self._results_count)
+                        else:
+                            status_label.update(f"[green]Status: Query completed ({item.results_count} results)[/green]")
+                    elif item.status == ScanStatus.FAILED:
+                        status_label.update(f"[red]Status: Query failed - {item.error}[/red]")
+                        if hasattr(app, 'log_event'):
+                            app.log_event("error", f"Query failed: {item.error}")
+                    elif item.status == ScanStatus.CANCELLED:
+                        status_label.update("[yellow]Status: Scan cancelled[/yellow]")
+                        if hasattr(app, 'log_event'):
+                            app.log_event("info", "Scan cancelled by user")
+                        await asyncio.sleep(1)
+                        self.dismiss(self._results_count)
+
+        except Exception as e:
+            status_label.update(f"[red]Status: Error - {e}[/red]")
+            if hasattr(app, 'log_event'):
+                app.log_event("error", f"Scan error: {e}")
+            await asyncio.sleep(2)
+            self.dismiss(0)
+
+    async def action_request_stop(self):
+        """Request scan stop."""
+        if self.scan_runner:
+            self.scan_runner.cancel()
+
+        status_label = self.query_one("#live-scan-status", Label)
+        status_label.update("[yellow]Status: Stopping scan...[/yellow]")
+
+    def on_button_pressed(self, event: Button.Pressed):
+        """Handle button presses."""
+        if event.button.id == "btn-stop-scan":
+            asyncio.create_task(self.action_request_stop())
+
+
 class OSINTApp(App):
     """OSINT-85 Command Nexus TUI Application."""
 
@@ -498,6 +711,15 @@ class OSINTApp(App):
             keywords=["execute", "search", "collect"]
         )
 
+        command_registry.register(
+            "scan.live",
+            "Run Live Scan",
+            "Execute async live scan with real-time results",
+            lambda: self._run_live_scan_for_current_category(),
+            CommandCategory.SCAN,
+            keywords=["async", "stream", "real-time", "live"]
+        )
+
         # Report commands
         command_registry.register(
             "report.generate",
@@ -568,6 +790,23 @@ class OSINTApp(App):
         self.push_screen(
             ScanProgressScreen(self.current_category),
             self.on_scan_complete
+        )
+
+    def _run_live_scan_for_current_category(self):
+        """Run live async scan for the current category."""
+        if not self.current_project:
+            log = self.query_one("#event-log", EventLog)
+            log.write_event("error", "No project selected")
+            return
+
+        category_label = next(
+            (label for cat_id, label, _ in CATEGORIES if cat_id == self.current_category),
+            "Unknown"
+        )
+
+        self.push_screen(
+            LiveScanScreen(self.current_category, category_label),
+            self.on_live_scan_complete
         )
 
     def _generate_report(self):
@@ -672,6 +911,16 @@ class OSINTApp(App):
             # Refresh results
             results = self.query_one("#results", ResultGrid)
             results.load_results(self.current_category)
+
+    def on_live_scan_complete(self, count: Optional[int]):
+        """Handle live scan completion."""
+        if count is not None and count > 0:
+            log = self.query_one("#event-log", EventLog)
+            log.write_event("success", f"Live scan complete - received {count} results")
+
+            # Refresh query builder to show updated counts
+            qb = self.query_one("#query-builder", QueryBuilderPanel)
+            qb.refresh_queries()
 
     def action_select_project(self):
         """Show project selection screen."""
