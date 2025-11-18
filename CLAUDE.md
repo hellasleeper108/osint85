@@ -83,12 +83,14 @@ osint85/
 
 - **osint85/**: Core Python package containing all application logic
   - `__main__.py`: CLI interface using Typer
+  - `tui.py`: Interactive TUI (Command Nexus) with Textual
   - `project.py`: Project/target management, SQLite interaction
   - `dorks.py`: LLM prompt engineering for query generation
   - `scanner.py`: Search API abstraction & result processing
   - `reporting.py`: Report generation with LLM summarization
   - `database.py`: Database schema, migrations, models
   - `llm_client.py`: Unified LLM client supporting multiple providers
+  - `osint85.tcss`: TUI styling (tactical HUD aesthetic)
 
 - **tests/**: Comprehensive test coverage with mocked LLM/API responses
 - **.osint85/**: Runtime project data (one DB per project, gitignored)
@@ -773,23 +775,23 @@ This is for internal audit/awareness, not attack.
 
 **Phase 1 - MVP:**
 - [x] Project structure
-- [ ] SQLite schema
-- [ ] CLI with basic commands
-- [ ] LLM client integration
-- [ ] Basic dork generation
-- [ ] Search API client (with mock for testing)
-- [ ] Simple reporting
+- [x] SQLite schema
+- [x] CLI with basic commands
+- [x] LLM client integration
+- [x] Basic dork generation
+- [x] Search API client (with mock for testing)
+- [x] Simple reporting
 
 **Phase 2 - Enhancement:**
-- [ ] Result tagging & scoring
+- [x] Result tagging & scoring
 - [ ] Advanced filtering
-- [ ] Multiple LLM provider support
+- [x] Multiple LLM provider support
 - [ ] Export to JSON/CSV
 - [ ] Improved error handling
 
 **Phase 3 - Polish:**
-- [ ] TUI with Rich/Textual
-- [ ] Interactive result browsing
+- [x] TUI with Rich/Textual (Command Nexus interface)
+- [x] Interactive result browsing
 - [ ] Result deduplication improvements
 - [ ] Performance optimization
 - [ ] Comprehensive testing

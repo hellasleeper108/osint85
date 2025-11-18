@@ -64,6 +64,7 @@ Think of it as: `tmux brain` + `recon-ng` + `LLM` = osint85
 
 ### 🔧 Technical Features
 
+- **Interactive TUI** - Tactical HUD-style terminal interface with live updates
 - Multiple LLM providers (Anthropic Claude, OpenAI GPT)
 - Search API abstraction (SerpAPI, with extensible architecture)
 - Rate limiting and retry logic
@@ -127,6 +128,25 @@ REQUEST_TIMEOUT=30
 
 ## Quick Start
 
+### Interactive TUI (Recommended)
+
+For the best experience, launch the interactive TUI:
+
+```bash
+osint85 tui
+```
+
+This launches the **OSINT-85 Command Nexus** - a tactical HUD-style interface with:
+- 📊 Live category navigation
+- 🎯 Interactive query builder
+- 🔍 Real-time result grid
+- 📝 Event log feed
+- ⌨️ Keyboard shortcuts (press `?` for help)
+
+### CLI Mode
+
+Alternatively, use the command-line interface:
+
 ### 1. Create a Project
 
 ```bash
@@ -177,6 +197,26 @@ osint85 report --out reports/acme_initial.md
 ## Usage
 
 ### Commands
+
+#### Interactive TUI
+
+```bash
+# Launch interactive TUI
+osint85 tui
+```
+
+The TUI provides a full-featured interface with:
+- **Sidebar**: Category navigation (Backups, Configs, Staging, etc.)
+- **Query Builder**: View and manage AI-generated queries
+- **Result Grid**: Browse search results in real-time
+- **Event Log**: Live activity feed
+
+**Keyboard Shortcuts:**
+- `p` - Select/switch project
+- `r` - Refresh data
+- `q` - Quit application
+- `/` - Command palette
+- Arrow keys - Navigate
 
 #### Project Management
 

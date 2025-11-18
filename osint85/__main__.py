@@ -352,6 +352,23 @@ def report(
 
 
 @app.command()
+def tui():
+    """Launch the interactive TUI (Terminal User Interface)."""
+    console.print("[cyan]Launching OSINT-85 Command Nexus...[/cyan]\n")
+
+    try:
+        from .tui import run_tui
+        run_tui()
+    except ImportError as e:
+        console.print(f"[red]Error: TUI dependencies not installed.[/red]")
+        console.print(f"[yellow]Install with: pip install 'textual>=0.47.1'[/yellow]")
+        raise typer.Exit(1)
+    except Exception as e:
+        console.print(f"[red]TUI error: {e}[/red]")
+        raise typer.Exit(1)
+
+
+@app.command()
 def version():
     """Show version information."""
     from . import __version__

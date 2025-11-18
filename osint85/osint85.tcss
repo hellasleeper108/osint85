@@ -1,0 +1,279 @@
+/* OSINT-85 Command Nexus - Tactical HUD Styling */
+
+/* Global Screen */
+Screen {
+    background: #0d0f12;
+    color: #00d4ff;
+}
+
+/* Header */
+Header {
+    background: #0a0c0f;
+    color: #00d4ff;
+    text-style: bold;
+}
+
+/* Footer */
+Footer {
+    background: #0a0c0f;
+    color: #00d4ff;
+}
+
+/* Main Layout */
+#main-layout {
+    height: 1fr;
+}
+
+/* Sidebar */
+#sidebar {
+    width: 30%;
+    border: tall #1b1e24;
+    background: #0f1115;
+    padding: 1 2;
+}
+
+.sidebar-title {
+    text-style: bold;
+    color: #00d4ff;
+    background: #1b1e24;
+    padding: 1;
+    margin-bottom: 1;
+}
+
+CategoryItem {
+    height: 3;
+    padding: 1 2;
+    margin: 0 0 1 0;
+    background: #14161a;
+    border: tall #1b1e24;
+}
+
+CategoryItem:hover {
+    background: #1a1d22;
+    border: tall #00d4ff;
+}
+
+CategoryItem.selected {
+    background: #1a2830;
+    border: tall #00d4ff;
+    text-style: bold;
+}
+
+/* Content Stack */
+#content-stack {
+    width: 70%;
+}
+
+/* Query Builder Panel */
+#query-builder {
+    height: 40%;
+    border: tall #1b1e24;
+    background: #0f1115;
+    padding: 1 2;
+}
+
+.panel-title {
+    text-style: bold;
+    color: #00d4ff;
+    background: #1b1e24;
+    padding: 1;
+    margin-bottom: 1;
+}
+
+#qb-desc {
+    color: #ffffff;
+    margin-bottom: 1;
+}
+
+#query-list {
+    height: auto;
+    max-height: 15;
+    overflow-y: auto;
+    margin-bottom: 1;
+}
+
+#query-list > Label {
+    padding: 1;
+    margin: 0 0 1 0;
+    background: #14161a;
+}
+
+/* Buttons */
+.button-row {
+    height: auto;
+    align: center middle;
+}
+
+Button {
+    margin: 0 1;
+}
+
+Button:hover {
+    text-style: bold;
+}
+
+/* Result Grid */
+#results {
+    height: 60%;
+    border: tall #1b1e24;
+    background: #0f1115;
+}
+
+DataTable {
+    background: #0f1115;
+    color: #00d4ff;
+}
+
+DataTable > .datatable--header {
+    background: #1b1e24;
+    color: #00d4ff;
+    text-style: bold;
+}
+
+DataTable > .datatable--cursor {
+    background: #1a2830;
+    color: #ffffff;
+}
+
+DataTable:focus > .datatable--cursor {
+    background: #205070;
+}
+
+/* Event Log */
+#event-log {
+    height: 10;
+    background: #0a0c0f;
+    border-top: tall #1b1e24;
+    padding: 1 2;
+}
+
+Log {
+    background: #0a0c0f;
+    color: #00d4ff;
+}
+
+/* Modal Containers */
+#project-modal, #generate-modal, #scan-modal {
+    align: center middle;
+    width: 60;
+    height: auto;
+    max-height: 30;
+    background: #0f1115;
+    border: thick #00d4ff;
+    padding: 2;
+}
+
+.modal-title {
+    text-style: bold;
+    color: #00d4ff;
+    background: #1b1e24;
+    padding: 1;
+    margin-bottom: 1;
+    width: 100%;
+    text-align: center;
+}
+
+#project-list {
+    height: 15;
+    border: tall #1b1e24;
+    background: #14161a;
+    margin-bottom: 1;
+}
+
+ListView {
+    background: #14161a;
+    border: tall #1b1e24;
+}
+
+ListItem {
+    padding: 1;
+}
+
+ListItem:hover {
+    background: #1a1d22;
+}
+
+ListItem.--highlight {
+    background: #1a2830;
+}
+
+/* Input Fields */
+Input {
+    background: #14161a;
+    border: tall #1b1e24;
+    color: #ffffff;
+    margin-bottom: 1;
+}
+
+Input:focus {
+    border: tall #00d4ff;
+}
+
+/* Progress Bar */
+ProgressBar {
+    background: #14161a;
+    color: #00d4ff;
+    margin-bottom: 1;
+}
+
+/* Status Container */
+#generation-status, #scan-status {
+    margin-top: 1;
+    padding: 1;
+    background: #14161a;
+}
+
+/* Scrollbars */
+::-webkit-scrollbar {
+    width: 1;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #00d4ff;
+}
+
+::-webkit-scrollbar-track {
+    background: #1b1e24;
+}
+
+/* Animations */
+CategoryItem {
+    transition: background 200ms, border 200ms;
+}
+
+Button {
+    transition: background 150ms;
+}
+
+/* Neon glow effect for focused elements */
+*:focus {
+    border: tall #00d4ff;
+}
+
+/* Terminal phosphor effect */
+Label {
+    text-style: none;
+}
+
+Static {
+    color: #00d4ff;
+}
+
+/* High contrast text */
+.error {
+    color: #ff3366;
+    text-style: bold;
+}
+
+.success {
+    color: #00ff88;
+    text-style: bold;
+}
+
+.warning {
+    color: #ffaa00;
+}
+
+.info {
+    color: #00d4ff;
+}
