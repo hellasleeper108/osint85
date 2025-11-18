@@ -28,6 +28,7 @@ from .command_registry import command_registry, CommandCategory
 from .command_palette import CommandPalette
 from .result_detail_view import ResultDetailView
 from .async_scanner import ScanTaskRunner, LiveResult, ScanProgress, ScanStatus
+from .graph_view import GraphView
 
 
 # Categories for the sidebar
@@ -754,6 +755,32 @@ class LiveScanScreen(ModalScreen):
             asyncio.create_task(self.action_request_stop())
 
 
+class GraphScreen(ModalScreen):
+    """Modal screen for graph visualization."""
+
+    BINDINGS = [
+        Binding("escape", "dismiss", "Close", show=True),
+        Binding("q", "dismiss", "Close", show=True),
+        Binding("plus", "zoom_in", "Zoom In", show=True),
+        Binding("minus", "zoom_out", "Zoom Out", show=True),
+    ]
+
+    def __init__(self, project_manager: ProjectManager, target_id: int, category: Optional[str] = None):
+        super().__init__()
+        self.pm = project_manager
+        self.target_id = target_id
+        self.category = category
+
+    def compose(self) -> ComposeResult:
+        with Container(id="graph-modal"):
+            self.graph_view = GraphView(self.pm)
+            yield self.graph_view
+
+    def on_mount(self):
+        """Load graph when screen mounts."""
+        self.graph_view.load_graph(self.target_id, self.category)
+
+
 class OSINTApp(App):
     """OSINT-85 Command Nexus TUI Application."""
 
@@ -883,6 +910,25 @@ class OSINTApp(App):
             lambda: self._remove_duplicates(),
             CommandCategory.VIEW,
             keywords=["dedupe", "dedup", "duplicates", "clean", "unique"]
+        )
+
+        # Graph visualization commands
+        command_registry.register(
+            "graph.view",
+            "Show Graph Visualization",
+            "Display interactive graph of discovered entities and relationships",
+            lambda: self._show_graph(),
+            CommandCategory.VIEW,
+            keywords=["graph", "network", "visualization", "relationships", "nodes", "edges"]
+        )
+
+        command_registry.register(
+            "graph.view_category",
+            "Show Category Graph",
+            "Display graph for current category only",
+            lambda: self._show_category_graph(),
+            CommandCategory.VIEW,
+            keywords=["graph", "category", "filter"]
         )
 
         # Navigation commands
@@ -1087,6 +1133,38 @@ class OSINTApp(App):
 
         except Exception as e:
             log.write_event("error", f"Deduplication error: {str(e)}")
+
+    def _show_graph(self):
+        """Show graph visualization for entire project."""
+        if not self.current_project:
+            log = self.query_one("#event-log", EventLog)
+            log.write_event("error", "No project selected")
+            return
+
+        log = self.query_one("#event-log", EventLog)
+        log.write_event("info", "Loading graph visualization...")
+
+        try:
+            pm = ProjectManager()
+            self.push_screen(GraphScreen(pm, self.current_project.id))
+        except Exception as e:
+            log.write_event("error", f"Graph error: {str(e)}")
+
+    def _show_category_graph(self):
+        """Show graph visualization for current category."""
+        if not self.current_project:
+            log = self.query_one("#event-log", EventLog)
+            log.write_event("error", "No project selected")
+            return
+
+        log = self.query_one("#event-log", EventLog)
+        log.write_event("info", f"Loading graph for category: {self.current_category}...")
+
+        try:
+            pm = ProjectManager()
+            self.push_screen(GraphScreen(pm, self.current_project.id, self.current_category))
+        except Exception as e:
+            log.write_event("error", f"Graph error: {str(e)}")
 
     def _navigate_to_category(self, category_id: str, category_label: str):
         """Navigate to a specific category."""

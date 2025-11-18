@@ -24,3 +24,4 @@ mypy==1.8.0
 # TUI
 textual==0.47.1
 rapidfuzz==3.6.1
+networkx==3.2.1
