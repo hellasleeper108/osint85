@@ -41,11 +41,12 @@ class TestResultDetailView:
         view.query_one = MagicMock()
         
         # Patch the app property on the class
+        # Patch the app property on the class
         with patch('osint85.result_detail_view.ResultDetailView.app', new_callable=PropertyMock) as mock_app_prop:
             mock_app = MagicMock()
             mock_app_prop.return_value = mock_app
             
-        with patch('osint85.llm_client.get_llm_client') as mock_get_client:
+            with patch('osint85.llm_client.get_llm_client') as mock_get_client:
                 mock_client = MagicMock()
                 mock_client.generate_async = AsyncMock(return_value="Summary")
                 mock_get_client.return_value = mock_client

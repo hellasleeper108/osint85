@@ -134,10 +134,9 @@ class TestConfig:
         mocker.patch('osint85.config.Config.OSINT_DIR', osint_dir)
 
         # Act
-        from importlib import reload
-        import osint85.config as config_module
-        reload(config_module)
-        config_module.Config.ensure_directories()
+        # Act
+        from osint85.config import Config
+        Config.ensure_directories()
 
         # Assert
         assert reports_dir.exists()

@@ -20,6 +20,9 @@ def mock_config(mocker):
     mocker.patch("osint85.config.config.ANTHROPIC_API_KEY", "dummy_key")
     mocker.patch("osint85.config.config.OPENAI_API_KEY", "dummy_key")
     mocker.patch("osint85.config.config.SEARCH_API_KEY", "dummy_key")
+    # Patch config in llm_client module
+    mocker.patch("osint85.llm_client.config.ANTHROPIC_API_KEY", "dummy_key")
+    mocker.patch("osint85.llm_client.config.OPENAI_API_KEY", "dummy_key")
 
 
 class TestReporter:
