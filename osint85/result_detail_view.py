@@ -207,7 +207,7 @@ class ResultDetailView(ModalScreen):
         # Import here to avoid circular imports
         from .reporting import Reporter
         from .config import config
-        from .llm_client import LLMClient
+        from .llm_client import get_llm_client
 
         # Log to event log if app has it
         if hasattr(self.app, 'log_event'):
@@ -215,11 +215,7 @@ class ResultDetailView(ModalScreen):
 
         try:
             # Create a minimal AI summary using the LLM client
-            llm_client = LLMClient(
-                provider=config.llm_provider,
-                api_key=config.llm_api_key,
-                model=config.llm_model
-            )
+            llm_client = get_llm_client(config.DEFAULT_LLM_PROVIDER)
 
             prompt = f"""Analyze this search result and provide a brief security assessment:
 

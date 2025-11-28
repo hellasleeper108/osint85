@@ -17,21 +17,24 @@ class TestScanWorkflow:
         pm = test_project_manager
 
         # Step 1: Create target
-        target = pm.create_target(
+        target = pm.create_project(
             name="Integration Test",
-            primary_domain="test.com",
+            domain="test.com",
             scope="*.test.com"
         )
 
         assert target.id is not None
 
         # Step 2: Generate queries (mocked LLM)
-        dork_gen = DorkGenerator(llm_client=mock_llm_client)
-        queries_json = mock_llm_client.generate(
-            system="test",
-            prompt="test",
-            model="test"
-        )
+        with pytest.warns(None) as record:
+            from unittest.mock import patch
+            with patch('osint85.dorks.get_llm_client', return_value=mock_llm_client):
+                dork_gen = DorkGenerator()
+                queries_json = mock_llm_client.generate(
+                    system="test",
+                    prompt="test",
+                    model="test"
+                )
 
         # Parse and save queries
         import json
@@ -44,7 +47,7 @@ class TestScanWorkflow:
             pytest.skip("Mock LLM response is not valid JSON")
 
         # Step 3: Run scanner (mocked API)
-        scanner = Scanner(search_client=mock_search_client)
+        scanner = Scanner(pm, search_client=mock_search_client)
 
         queries = pm.list_queries(target.id)
         for query in queries[:1]:  # Test with first query
@@ -56,7 +59,8 @@ class TestScanWorkflow:
                     query_id=query.id,
                     url=result["url"],
                     title=result["title"],
-                    snippet=result.get("snippet", "")
+                    snippet=result.get("snippet", ""),
+                    source_engine=result.get("source_engine", "")
                 )
 
         # Verify results were saved
@@ -70,7 +74,7 @@ class TestScanWorkflow:
         pm = test_project_manager
 
         # Create target and queries
-        target = pm.create_target("Dedupe Test", "test.com")
+        target = pm.create_project("Dedupe Test", "test.com")
         queries = pm.save_queries(target.id, [{
             "category": "test",
             "risk_level": "low",
@@ -107,7 +111,7 @@ class TestScanWorkflow:
 
         # Check cache stats
         stats = api_cache.get_stats()
-        assert stats.cache_hits > 0
+        assert stats.hits > 0
 
 
 class TestAsyncWorkflow:

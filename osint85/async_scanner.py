@@ -2,7 +2,7 @@
 
 import asyncio
 import time
-from typing import List, Dict, Any, Optional, AsyncIterator
+from typing import List, Dict, Any, Optional, AsyncIterator, Union
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
@@ -181,7 +181,7 @@ class ScanTaskRunner:
         queries: List[Query],
         max_results: int = 20,
         delay: float = 1.0
-    ) -> AsyncIterator[LiveResult | ScanProgress]:
+    ) -> AsyncIterator[Union[LiveResult, ScanProgress]]:
         """Run queries and yield results incrementally.
 
         Args:
@@ -295,7 +295,7 @@ class ScanTaskRunner:
         category: str,
         max_results: int = 20,
         delay: float = 1.0
-    ) -> AsyncIterator[LiveResult | ScanProgress]:
+    ) -> AsyncIterator[Union[LiveResult, ScanProgress]]:
         """Run all enabled queries for a category.
 
         Args:

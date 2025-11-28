@@ -17,14 +17,14 @@ class TestAnthropicClient:
     def test_generate_success(self, mocker):
         """Test that generate returns response text."""
         # Arrange
-        mock_anthropic = mocker.patch('osint85.llm_client.anthropic')
         mock_client = MagicMock()
         mock_message = MagicMock()
         mock_content = MagicMock()
         mock_content.text = "Generated response"
         mock_message.content = [mock_content]
         mock_client.messages.create.return_value = mock_message
-        mock_anthropic.Anthropic.return_value = mock_client
+        
+        mocker.patch('anthropic.Anthropic', return_value=mock_client)
 
         client = AnthropicClient(api_key="test_key")
 
@@ -41,10 +41,9 @@ class TestAnthropicClient:
     def test_generate_api_error(self, mocker):
         """Test that generate raises error on API failure."""
         # Arrange
-        mock_anthropic = mocker.patch('osint85.llm_client.anthropic')
         mock_client = MagicMock()
         mock_client.messages.create.side_effect = Exception("API Error")
-        mock_anthropic.Anthropic.return_value = mock_client
+        mocker.patch('anthropic.Anthropic', return_value=mock_client)
 
         client = AnthropicClient(api_key="test_key")
 
@@ -54,7 +53,7 @@ class TestAnthropicClient:
 
     def test_init_without_api_key(self, mocker):
         """Test that init raises error without API key."""
-        mocker.patch('osint85.llm_client.anthropic')
+        mocker.patch('anthropic.Anthropic')
         mocker.patch('osint85.llm_client.config.ANTHROPIC_API_KEY', None)
 
         with pytest.raises(ValueError, match="ANTHROPIC_API_KEY is required"):
@@ -67,7 +66,6 @@ class TestOpenAIClient:
     def test_generate_success(self, mocker):
         """Test that generate returns response text."""
         # Arrange
-        mock_openai = mocker.patch('osint85.llm_client.openai')
         mock_client = MagicMock()
         mock_response = MagicMock()
         mock_choice = MagicMock()
@@ -76,7 +74,8 @@ class TestOpenAIClient:
         mock_choice.message = mock_message
         mock_response.choices = [mock_choice]
         mock_client.chat.completions.create.return_value = mock_response
-        mock_openai.OpenAI.return_value = mock_client
+        
+        mocker.patch('openai.OpenAI', return_value=mock_client)
 
         client = OpenAIClient(api_key="test_key")
 
@@ -93,10 +92,9 @@ class TestOpenAIClient:
     def test_generate_api_error(self, mocker):
         """Test that generate raises error on API failure."""
         # Arrange
-        mock_openai = mocker.patch('osint85.llm_client.openai')
         mock_client = MagicMock()
         mock_client.chat.completions.create.side_effect = Exception("API Error")
-        mock_openai.OpenAI.return_value = mock_client
+        mocker.patch('openai.OpenAI', return_value=mock_client)
 
         client = OpenAIClient(api_key="test_key")
 
@@ -106,7 +104,7 @@ class TestOpenAIClient:
 
     def test_init_without_api_key(self, mocker):
         """Test that init raises error without API key."""
-        mocker.patch('osint85.llm_client.openai')
+        mocker.patch('openai.OpenAI')
         mocker.patch('osint85.llm_client.config.OPENAI_API_KEY', None)
 
         with pytest.raises(ValueError, match="OPENAI_API_KEY is required"):
@@ -118,7 +116,7 @@ class TestGetLLMClient:
 
     def test_get_anthropic_client(self, mocker):
         """Test that get_llm_client returns AnthropicClient."""
-        mocker.patch('osint85.llm_client.anthropic')
+        mocker.patch('anthropic.Anthropic')
         mocker.patch('osint85.llm_client.config.ANTHROPIC_API_KEY', 'test_key')
 
         client = get_llm_client("anthropic")
@@ -126,7 +124,7 @@ class TestGetLLMClient:
 
     def test_get_openai_client(self, mocker):
         """Test that get_llm_client returns OpenAIClient."""
-        mocker.patch('osint85.llm_client.openai')
+        mocker.patch('openai.OpenAI')
         mocker.patch('osint85.llm_client.config.OPENAI_API_KEY', 'test_key')
 
         client = get_llm_client("openai")

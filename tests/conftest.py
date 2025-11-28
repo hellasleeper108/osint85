@@ -153,13 +153,12 @@ def test_db_with_data(test_db):
 
 
 @pytest.fixture
-def test_project_manager(temp_dir, monkeypatch):
+def test_project_manager(temp_dir):
     """Create a test project manager with isolated database."""
     # Set test database path
     test_db_path = temp_dir / "project.db"
-    monkeypatch.setattr("osint85.project.DB_PATH", str(test_db_path))
-
-    pm = ProjectManager()
+    
+    pm = ProjectManager(db_path=str(test_db_path))
     yield pm
     pm.db.close()
 
@@ -378,6 +377,12 @@ def setup_test_env(monkeypatch, temp_dir):
 
     # Disable real API calls
     monkeypatch.setenv("OSINT85_MOCK_MODE", "true")
+    
+    # Set dummy API key
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "dummy_key")
+    monkeypatch.setattr("osint85.config.config.ANTHROPIC_API_KEY", "dummy_key")
+    monkeypatch.setattr("osint85.config.config.OPENAI_API_KEY", "dummy_key")
+    monkeypatch.setattr("osint85.config.config.SEARCH_API_KEY", "dummy_key")
 
     yield
 

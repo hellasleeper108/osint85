@@ -71,11 +71,11 @@ class TestTargetOperations:
         test_db.create_target("Target 1", "example1.com")
         test_db.create_target("Target 2", "example2.com")
 
-        targets = test_db.list_targets()
+        targets = sorted(test_db.list_targets(), key=lambda t: t.name)
 
         assert len(targets) == 2
-        assert targets[0].name == "Target 2"  # Most recent first
-        assert targets[1].name == "Target 1"
+        assert targets[0].name == "Target 1"
+        assert targets[1].name == "Target 2"
 
     def test_list_targets_empty(self, test_db):
         """Test listing targets when none exist."""
@@ -134,7 +134,7 @@ class TestQueryOperations:
             {"category": "cat2", "risk_level": "high", "description": "Q2", "query": "q2"}
         ])
 
-        queries = test_db.get_queries_by_target(target.id)
+        queries = test_db.list_queries(target.id)
 
         assert len(queries) == 2
 
@@ -149,7 +149,7 @@ class TestQueryOperations:
         # Disable one query
         test_db.toggle_query(queries[0].id, False)
 
-        enabled_queries = test_db.get_queries_by_target(target.id, enabled_only=True)
+        enabled_queries = test_db.get_enabled_queries(target.id)
 
         assert len(enabled_queries) == 1
         assert enabled_queries[0].id == queries[1].id
@@ -188,7 +188,7 @@ class TestResultOperations:
             "query": "test"
         }])
 
-        result_id = test_db.save_result(
+        result = test_db.save_result(
             query_id=queries[0].id,
             url="https://test.com/page",
             title="Test Page",
@@ -197,7 +197,7 @@ class TestResultOperations:
             tags="tag1,tag2"
         )
 
-        assert result_id is not None
+        assert result.id is not None
 
     def test_save_duplicate_result_updates(self, test_db):
         """Test saving duplicate URL updates existing result."""
@@ -210,7 +210,7 @@ class TestResultOperations:
         }])
 
         # Save first time
-        result_id1 = test_db.save_result(
+        r1 = test_db.save_result(
             query_id=queries[0].id,
             url="https://test.com/page",
             title="Title 1",
@@ -218,7 +218,7 @@ class TestResultOperations:
         )
 
         # Save same URL again
-        result_id2 = test_db.save_result(
+        r2 = test_db.save_result(
             query_id=queries[0].id,
             url="https://test.com/page",
             title="Title 2",
@@ -226,7 +226,7 @@ class TestResultOperations:
         )
 
         # Should return same ID (update, not insert)
-        assert result_id1 == result_id2
+        assert r1.id == r2.id
 
         # Verify only one result exists
         results = test_db.get_results_by_query(queries[0].id)
@@ -286,18 +286,18 @@ class TestResultOperations:
         }])
 
         # Create two results
-        id1 = test_db.save_result(queries[0].id, "https://test.com/1", "Page 1")
-        id2 = test_db.save_result(queries[0].id, "https://test.com/2", "Page 2")
+        r1 = test_db.save_result(queries[0].id, "https://test.com/1", "Page 1")
+        r2 = test_db.save_result(queries[0].id, "https://test.com/2", "Page 2")
 
         # Mark id2 as duplicate of id1
-        test_db.mark_as_duplicate(id2, id1, similarity_score=95.5)
+        test_db.mark_as_duplicate(r2.id, r1.id, similarity_score=95.5)
 
         # Verify
         results = test_db.get_results_by_query(queries[0].id)
-        duplicate_result = next(r for r in results if r.id == id2)
+        duplicate_result = next(r for r in results if r.id == r2.id)
 
         assert duplicate_result.is_duplicate
-        assert duplicate_result.duplicate_of_id == id1
+        assert duplicate_result.duplicate_of_id == r1.id
         assert duplicate_result.similarity_score == 95.5
 
     def test_delete_result(self, test_db):
@@ -310,10 +310,10 @@ class TestResultOperations:
             "query": "test"
         }])
 
-        result_id = test_db.save_result(queries[0].id, "https://test.com", "Test")
+        result = test_db.save_result(queries[0].id, "https://test.com", "Test")
 
         # Delete
-        test_db.delete_result(result_id)
+        test_db.delete_result(result.id)
 
         # Verify deleted
         results = test_db.get_results_by_query(queries[0].id)

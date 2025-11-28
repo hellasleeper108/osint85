@@ -313,7 +313,7 @@ class AsyncDatabase:
             tags=row['tags'],
             first_seen_at=row['first_seen_at'],
             last_seen_at=row['last_seen_at'],
-            is_duplicate=bool(row.get('is_duplicate', 0)),
-            duplicate_of_id=row.get('duplicate_of_id'),
-            similarity_score=row.get('similarity_score')
+            is_duplicate=bool(row['is_duplicate'] if 'is_duplicate' in row.keys() else 0),
+            duplicate_of_id=row['duplicate_of_id'] if 'duplicate_of_id' in row.keys() else None,
+            similarity_score=row['similarity_score'] if 'similarity_score' in row.keys() else None
         )

@@ -538,18 +538,19 @@ class Database:
                 tags=row['tags'],
                 first_seen_at=row['first_seen_at'],
                 last_seen_at=row['last_seen_at'],
-                is_duplicate=bool(row.get('is_duplicate', 0)),
-                duplicate_of_id=row.get('duplicate_of_id'),
-                similarity_score=row.get('similarity_score')
+                is_duplicate=bool(row['is_duplicate'] if 'is_duplicate' in row.keys() else 0),
+                duplicate_of_id=row['duplicate_of_id'] if 'duplicate_of_id' in row.keys() else None,
+                similarity_score=row['similarity_score'] if 'similarity_score' in row.keys() else None
             )
             for row in rows
         ]
 
-    def get_all_results(self, target_id: int) -> List[Result]:
+    def get_all_results(self, target_id: int, category: Optional[str] = None) -> List[Result]:
         """Get all results for a target.
 
         Args:
             target_id: Target ID
+            category: Optional category to filter by
 
         Returns:
             List of Result objects
@@ -558,12 +559,21 @@ class Database:
             raise RuntimeError("Database connection not established")
 
         cursor = self.conn.cursor()
-        cursor.execute("""
+        
+        query = """
             SELECT r.* FROM results r
             JOIN queries q ON r.query_id = q.id
             WHERE q.target_id = ?
-            ORDER BY r.first_seen_at
-        """, (target_id,))
+        """
+        params = [target_id]
+        
+        if category:
+            query += " AND q.category = ?"
+            params.append(category)
+            
+        query += " ORDER BY r.first_seen_at"
+        
+        cursor.execute(query, params)
         rows = cursor.fetchall()
 
         return [
@@ -577,9 +587,9 @@ class Database:
                 tags=row['tags'],
                 first_seen_at=row['first_seen_at'],
                 last_seen_at=row['last_seen_at'],
-                is_duplicate=bool(row.get('is_duplicate', 0)),
-                duplicate_of_id=row.get('duplicate_of_id'),
-                similarity_score=row.get('similarity_score')
+                is_duplicate=bool(row['is_duplicate'] if 'is_duplicate' in row.keys() else 0),
+                duplicate_of_id=row['duplicate_of_id'] if 'duplicate_of_id' in row.keys() else None,
+                similarity_score=row['similarity_score'] if 'similarity_score' in row.keys() else None
             )
             for row in rows
         ]

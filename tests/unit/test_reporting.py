@@ -10,6 +10,18 @@ from osint85.project import ProjectManager
 from osint85.database import Target
 
 
+@pytest.fixture(autouse=True)
+def mock_config(mocker):
+    """Mock config for all tests."""
+    mocker.patch("osint85.config.Config.ANTHROPIC_API_KEY", "dummy_key")
+    mocker.patch("osint85.config.Config.OPENAI_API_KEY", "dummy_key")
+    mocker.patch("osint85.config.Config.SEARCH_API_KEY", "dummy_key")
+    # Also patch the instance to be safe
+    mocker.patch("osint85.config.config.ANTHROPIC_API_KEY", "dummy_key")
+    mocker.patch("osint85.config.config.OPENAI_API_KEY", "dummy_key")
+    mocker.patch("osint85.config.config.SEARCH_API_KEY", "dummy_key")
+
+
 class TestReporter:
     """Tests for Reporter class."""
 

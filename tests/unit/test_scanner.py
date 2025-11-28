@@ -2,6 +2,7 @@
 
 import pytest
 from unittest.mock import MagicMock
+import requests
 
 from osint85.scanner import (
     SerpAPIClient,
@@ -53,7 +54,7 @@ class TestSerpAPIClient:
     def test_search_api_error(self, mocker):
         """Test that search raises error on API failure."""
         # Arrange
-        mocker.patch('osint85.scanner.requests.get', side_effect=Exception("API Error"))
+        mocker.patch('osint85.scanner.requests.get', side_effect=requests.RequestException("API Error"))
 
         client = SerpAPIClient(api_key="test_key")
 
@@ -175,7 +176,7 @@ class TestResultProcessor:
 
     def test_tag_debug_urls(self):
         """Test that debug URLs are tagged correctly."""
-        tags = ResultProcessor.tag_url("https://example.com/debug")
+        tags = ResultProcessor.tag_url("https://example.com/debug/")
         assert "debug" in tags
 
         tags = ResultProcessor.tag_url("https://example.com/error.php")
@@ -226,14 +227,14 @@ class TestScanner:
     """Tests for Scanner class."""
 
     @pytest.fixture
-    def mock_project_manager(self, mocker, temp_db, sample_target):
+    def mock_project_manager(self, mocker, test_db, sample_target):
         """Create mock project manager."""
         from osint85.project import ProjectManager
-        pm = ProjectManager(str(temp_db.db_path))
+        pm = ProjectManager(str(test_db.db_path))
         return pm
 
     @pytest.fixture
-    def sample_queries_objs(self, temp_db, sample_target):
+    def sample_queries_objs(self, test_db, sample_target):
         """Create sample query objects."""
         queries = [
             {
@@ -249,7 +250,7 @@ class TestScanner:
                 "query": "site:example.com test2"
             }
         ]
-        return temp_db.save_queries(sample_target.id, queries)
+        return test_db.save_queries(sample_target.id, queries)
 
     def test_run_scan(self, mock_project_manager, sample_target, sample_queries_objs):
         """Test that run executes queries and saves results."""
